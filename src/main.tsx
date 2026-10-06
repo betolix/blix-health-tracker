@@ -1,6 +1,15 @@
-import React,{useEffect,useMemo,useState} from 'react';
-import{createRoot}from'react-dom/client';
-import'./style.css';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+
+import { Amplify } from 'aws-amplify';
+import { Authenticator } from '@aws-amplify/ui-react';
+
+import '@aws-amplify/ui-react/styles.css';
+import './style.css';
+
+import outputs from '../amplify_outputs.json';
+
+Amplify.configure(outputs);
 
 type Quality='measured'|'label'|'estimated';
 type Meal={id:string;name:string;detail:string;kcal:number;protein:number;carbs:number;fat:number;fiber:number;quality:Quality};
@@ -33,7 +42,7 @@ const fmtDate=(d:string)=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{mo
 const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
 const clamp=(n:number)=>Number.isFinite(n)?Math.max(0,n):0;
 
-function App(){
+function App({ signOut }: { signOut?: () => void }) {
   const [theme,setTheme]=useState<'dark'|'light'>(()=>{const s=localStorage.getItem('health-theme');return s==='dark'||s==='light'?s:window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'});
   const [store,setStore]=useState<Store>(()=>{try{const s=localStorage.getItem('alberto-health-v2');return s?JSON.parse(s):seed}catch{return seed}});
   const [date,setDate]=useState(TODAY);
@@ -48,7 +57,32 @@ function App(){
   const update=(fn:(s:Store)=>Store)=>setStore(s=>fn(structuredClone(s)));
   const removeMeal=(id:string)=>update(s=>{s.days[date].meals=s.days[date].meals.filter(m=>m.id!==id);return s});
   return <main>
-    <header><div><span className="eyebrow">ALBERTO // HEALTH</span><h1>Daily dashboard</h1></div><div className="headerRight"><button className="ghost" onClick={()=>setShowVitals(true)}>+ VITALS</button><button className="themeToggle" onClick={()=>setTheme(theme==='dark'?'light':'dark')}><span>{theme==='dark'?'☀':'☾'}</span><b>{theme==='dark'?'LIGHT':'DARK'}</b></button></div></header>
+    <header>
+      <div>
+        <span className="eyebrow">ALBERTO // HEALTH</span>
+        <h1>Daily dashboard</h1>
+      </div>
+
+      <div className="headerRight">
+        <button className="ghost" onClick={() => setShowVitals(true)}>
+          + VITALS
+        </button>
+
+        <button
+          className="themeToggle"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        >
+          <span>{theme === 'dark' ? '☀' : '☾'}</span>
+          <b>{theme === 'dark' ? 'LIGHT' : 'DARK'}</b>
+        </button>
+
+        {signOut && (
+          <button className="ghost" onClick={signOut}>
+            SIGN OUT
+          </button>
+        )}
+      </div>
+    </header>
 
     <nav className="daynav"><button onClick={()=>setDate('2026-10-03')} className={date==='2026-10-03'?'active':''}>OCT 03</button><button onClick={()=>setDate('2026-10-04')} className={date==='2026-10-04'?'active':''}>OCT 04</button></nav>
 
@@ -85,4 +119,12 @@ function BPChart({data}:{data:BPEntry[]}){return <div className="bpRows">{data.s
 function FoodModal({onClose,onSave}:{onClose:()=>void;onSave:(m:Meal)=>void}){const [f,setF]=useState({name:'Meal',detail:'',kcal:'',protein:'',carbs:'',fat:'',fiber:'',quality:'estimated' as Quality});const field=(k:keyof typeof f)=>(e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement>)=>setF({...f,[k]:e.target.value});return <div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal" onSubmit={e=>{e.preventDefault();onSave({id:uid(),name:f.name||'Meal',detail:f.detail,kcal:clamp(+f.kcal),protein:clamp(+f.protein),carbs:clamp(+f.carbs),fat:clamp(+f.fat),fiber:clamp(+f.fiber),quality:f.quality})}}><div className="modalHead"><h2>Add food</h2><button type="button" onClick={onClose}>×</button></div><label>Category<input value={f.name} onChange={field('name')}/></label><label>Description<input value={f.detail} onChange={field('detail')} placeholder="e.g. chicken breast, 180 g" autoFocus/></label><div className="formGrid"><label>Calories<input type="number" value={f.kcal} onChange={field('kcal')}/></label><label>Protein (g)<input type="number" step="0.1" value={f.protein} onChange={field('protein')}/></label><label>Carbs (g)<input type="number" step="0.1" value={f.carbs} onChange={field('carbs')}/></label><label>Fat (g)<input type="number" step="0.1" value={f.fat} onChange={field('fat')}/></label><label>Fiber (g)<input type="number" step="0.1" value={f.fiber} onChange={field('fiber')}/></label><label>Source<select value={f.quality} onChange={field('quality')}><option value="measured">Measured</option><option value="label">Label</option><option value="estimated">Estimated</option></select></label></div><button className="primary">SAVE FOOD</button></form></div>}
 function VitalsModal({latestW,onClose,onSave}:{latestW:number;onClose:()=>void;onSave:(kg:number,sys:number,dia:number)=>void}){const [kg,setKg]=useState(String(latestW));const [sys,setSys]=useState('');const [dia,setDia]=useState('');return <div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&onClose()}><form className="modal small" onSubmit={e=>{e.preventDefault();onSave(+kg,+sys,+dia)}}><div className="modalHead"><h2>Add today's vitals</h2><button type="button" onClick={onClose}>×</button></div><label>Weight (kg)<input type="number" step="0.1" value={kg} onChange={e=>setKg(e.target.value)}/></label><div className="formGrid two"><label>Systolic<input type="number" value={sys} onChange={e=>setSys(e.target.value)} placeholder="e.g. 135"/></label><label>Diastolic<input type="number" value={dia} onChange={e=>setDia(e.target.value)} placeholder="e.g. 88"/></label></div><button className="primary">SAVE VITALS</button></form></div>}
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <Authenticator>
+      {({ signOut }) => (
+        <App signOut={signOut} />
+      )}
+    </Authenticator>
+  </React.StrictMode>
+);

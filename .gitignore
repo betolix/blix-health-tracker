@@ -3,3 +3,6 @@ dist/
 .env
 .env.*
 .DS_Store
+amplify_outputs.json
+.amplify/
+tsconfig.tsbuildinfo
