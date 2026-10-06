@@ -386,6 +386,7 @@ function App({ signOut }: { signOut?: () => void }) {
 ////////////
 
 useEffect(() => {
+  loadFoodFromCloud();
   loadVitalsFromCloud();
 }, []);
 
