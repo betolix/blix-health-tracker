@@ -6,3 +6,4 @@ dist/
 amplify_outputs.json
 .amplify/
 tsconfig.tsbuildinfo
+.npm/
