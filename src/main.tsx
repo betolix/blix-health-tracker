@@ -29,26 +29,10 @@ type ListPage<T> = { data: T[]; nextToken?: string | null; errors?: readonly unk
 
 const targets = { kcal: 2150, protein: 170, carbs: 210, fat: 70, fiber: 30, targetWeight: 77 };
 const TODAY = new Date().toLocaleDateString('en-CA');
-const seed: Store = {
-  days: {
-    '2026-10-03': {
-      date: '2026-10-03', meals: [
-        { id: '1', name: 'Breakfast', detail: '2 whole eggs + 200 g egg whites', kcal: 249, protein: 34, carbs: 1, fat: 10, fiber: 0, quality: 'label' },
-        { id: '2', name: 'Coffee', detail: '2 × 16 oz decaf 2% lattes', kcal: 380, protein: 25, carbs: 30, fat: 16, fiber: 0, quality: 'estimated' },
-        { id: '3', name: 'Lunch', detail: 'T-bone steak, ~191 g consumed', kcal: 500, protein: 53, carbs: 0, fat: 32, fiber: 0, quality: 'estimated' },
-        { id: '4', name: 'Potatoes', detail: '103 g baby potatoes + 2 small potatoes', kcal: 143, protein: 3.5, carbs: 33, fat: 0.2, fiber: 3, quality: 'estimated' },
-        { id: '5', name: 'Snack', detail: '1 banana', kcal: 105, protein: 1.3, carbs: 27, fat: 0.3, fiber: 3.1, quality: 'estimated' },
-        { id: '6', name: 'Snack', detail: '170 g Siggi’s skyr', kcal: 120, protein: 18, carbs: 13, fat: 0, fiber: 0, quality: 'label' }
-      ]
-    },
-    '2026-10-04': {
-      date: '2026-10-04', meals: [
-        { id: '7', name: 'Breakfast', detail: '2 whole eggs + 226 g egg whites', kcal: 263, protein: 37, carbs: 1, fat: 10, fiber: 0, quality: 'label' }
-      ]
-    }
-  },
-  weights: [{ date: '2026-09-23', kg: 90.9 }, { date: '2026-09-24', kg: 90.5 }, { date: '2026-09-25', kg: 90.0 }, { date: '2026-09-26', kg: 90.2 }, { date: '2026-09-27', kg: 90.9 }, { date: '2026-09-28', kg: 89.8 }, { date: '2026-10-02', kg: 90.2 }, { date: '2026-10-03', kg: 90.1 }],
-  bp: [{ date: '2026-09-28', sys: 135, dia: 98 }, { date: '2026-10-02', sys: 142, dia: 96 }, { date: '2026-10-03', sys: 138, dia: 92 }]
+const emptyStore: Store = {
+  days: {},
+  weights: [],
+  bp: [],
 };
 
 const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -77,7 +61,7 @@ const TRACKING_START = '2026-10-03';
 
 function App({ signOut }: { signOut?: () => void }) {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => { const s = localStorage.getItem('health-theme'); return s === 'dark' || s === 'light' ? s : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark' });
-  const [store, setStore] = useState<Store>(() => { try { const s = localStorage.getItem('alberto-health-v2'); return s ? JSON.parse(s) : seed } catch { return seed } });
+  const [store, setStore] = useState<Store>(emptyStore);
   const [date, setDate] = useState(TODAY);
 
   const availableDates = useMemo(
@@ -88,7 +72,7 @@ function App({ signOut }: { signOut?: () => void }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showVitals, setShowVitals] = useState(false);
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('health-theme', theme) }, [theme]);
-  useEffect(() => localStorage.setItem('alberto-health-v2', JSON.stringify(store)), [store]);
+  
   const day = store.days[date] || { date, meals: [] };
   const totals = useMemo(() => day.meals.reduce((a, m) => ({ kcal: a.kcal + m.kcal, protein: a.protein + m.protein, carbs: a.carbs + m.carbs, fat: a.fat + m.fat, fiber: a.fiber + m.fiber }), { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }), [day]);
   const latestW = store.weights.at(-1); const latestBP = store.bp.at(-1);
