@@ -7,3 +7,4 @@ amplify_outputs.json
 .amplify/
 tsconfig.tsbuildinfo
 .npm/
+sandbox-health-export.json
