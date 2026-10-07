@@ -479,8 +479,6 @@ useEffect(() => {
 
     <section className="meals"><div className="sectionHead"><h2>Food log</h2><button className="add" onClick={() => setShowAdd(true)}>+ ADD FOOD</button></div>{day.meals.length === 0 ? <div className="empty">No food logged for this day.</div> : day.meals.map(m => <div className="meal" key={m.id}><div className="mealMain"><b>{m.name}</b><span>{m.detail}</span><em className={`q ${m.quality}`}>{m.quality}</em></div><div className="nums"><b>{Math.round(m.kcal)} kcal</b><span>{Math.round(m.protein)} g protein</span></div><button className="delete" onClick={() => removeMeal(m.id)} aria-label="Delete food">×</button></div>)}</section>
     <footer> Nutrition values can be measured, label-derived or estimated. Data is securely synced with your account. </footer>
-    
-    ////////// This is important: we no longer close the modal unless AWS confirms that the cloud record was created.
 
     {showAdd && (
       <FoodModal
