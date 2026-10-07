@@ -495,8 +495,6 @@ useEffect(() => {
       />
     )}
 
-    //////////
-
     {showVitals && (
   <VitalsModal
     latestW={latestW?.kg ?? 90.1}
