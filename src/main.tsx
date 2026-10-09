@@ -23,7 +23,7 @@ type WeightEntry = { date: string; kg: number };
 type BPEntry = { date: string; sys: number; dia: number };
 type Store = { days: Record<string, Day>; weights: WeightEntry[]; bp: BPEntry[] };
 
-type ListPage<T> = { data: T[]; nextToken?: string | null; errors?: readonly unknown[];}; 
+type ListPage<T> = { data: T[]; nextToken?: string | null; errors?: readonly unknown[]; };
 
 
 
@@ -57,7 +57,6 @@ const getDateRange = (start: string, end: string) => {
 
 const TRACKING_START = '2026-10-03';
 
-/////
 
 function App({ signOut }: { signOut?: () => void }) {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => { const s = localStorage.getItem('health-theme'); return s === 'dark' || s === 'light' ? s : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark' });
@@ -71,65 +70,67 @@ function App({ signOut }: { signOut?: () => void }) {
 
   const [showAdd, setShowAdd] = useState(false);
   const [showVitals, setShowVitals] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('health-theme', theme) }, [theme]);
-  
+
   const day = store.days[date] || { date, meals: [] };
   const totals = useMemo(() => day.meals.reduce((a, m) => ({ kcal: a.kcal + m.kcal, protein: a.protein + m.protein, carbs: a.carbs + m.carbs, fat: a.fat + m.fat, fiber: a.fiber + m.fiber }), { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }), [day]);
   const latestW = store.weights.at(-1); const latestBP = store.bp.at(-1);
   const remaining = { kcal: Math.max(0, targets.kcal - totals.kcal), protein: Math.max(0, targets.protein - totals.protein) };
-  
+
   const update = (fn: (s: Store) => Store) => setStore(s => fn(structuredClone(s)));
-  
+
   /////// const saveFood  
 
   const saveFood = async (m: Meal): Promise<boolean> => {
-  try {
-    const { data, errors } = await client.models.FoodEntry.create(
-      {
-        date,
-        name: m.name,
-        calories: m.kcal,
-        protein: m.protein,
-        carbs: m.carbs,
-        fat: m.fat,
-        fiber: m.fiber,
-        notes: m.detail,
-        source: m.quality,
-      },
-      {
-        authMode: 'userPool',
-      }
-    );
+    try {
+      const { data, errors } = await client.models.FoodEntry.create(
+        {
+          date,
+          name: m.name,
+          calories: m.kcal,
+          protein: m.protein,
+          carbs: m.carbs,
+          fat: m.fat,
+          fiber: m.fiber,
+          notes: m.detail,
+          source: m.quality,
+        },
+        {
+          authMode: 'userPool',
+        }
+      );
 
-    if (errors?.length || !data) {
-      console.error('FoodEntry create errors:', errors);
+      if (errors?.length || !data) {
+        console.error('FoodEntry create errors:', errors);
+        alert('The food entry could not be saved to the cloud.');
+        return false;
+      }
+
+      // Keep a local backup, using the DynamoDB/AppSync record ID.
+      update((s) => {
+        if (!s.days[date]) {
+          s.days[date] = { date, meals: [] };
+        }
+
+        s.days[date].meals.push({
+          ...m,
+          id: data.id,
+        });
+
+        return s;
+      });
+
+      console.log('Food saved to cloud:', data.id);
+
+      return true;
+    } catch (error) {
+      console.error('Cloud save failed:', error);
       alert('The food entry could not be saved to the cloud.');
       return false;
     }
-
-    // Keep a local backup, using the DynamoDB/AppSync record ID.
-    update((s) => {
-      if (!s.days[date]) {
-        s.days[date] = { date, meals: [] };
-      }
-
-      s.days[date].meals.push({
-        ...m,
-        id: data.id,
-      });
-
-      return s;
-    });
-
-    console.log('Food saved to cloud:', data.id);
-
-    return true;
-  } catch (error) {
-    console.error('Cloud save failed:', error);
-    alert('The food entry could not be saved to the cloud.');
-    return false;
-  }
-};
+  };
 
 
   const loadFoodFromCloud = async () => {
@@ -146,148 +147,144 @@ function App({ signOut }: { signOut?: () => void }) {
             nextToken,
           });
 
-      if (result.errors?.length) {
-        console.error(
-          'Could not load cloud food:',
-          result.errors
-        );
-        return;
+        if (result.errors?.length) {
+          console.error(
+            'Could not load cloud food:',
+            result.errors
+          );
+          return;
+        }
+
+        allFood.push(...result.data);
+
+        nextToken = result.nextToken ?? null;
+      } while (nextToken);
+
+      const cloudDays: Record<string, Day> = {};
+
+      for (const food of allFood) {
+        if (!cloudDays[food.date]) {
+          cloudDays[food.date] = {
+            date: food.date,
+            meals: [],
+          };
+        }
+
+        cloudDays[food.date].meals.push({
+          id: food.id,
+          name: food.name,
+          detail: food.notes ?? '',
+          kcal: food.calories,
+          protein: food.protein ?? 0,
+          carbs: food.carbs ?? 0,
+          fat: food.fat ?? 0,
+          fiber: food.fiber ?? 0,
+          quality: food.source ?? 'estimated',
+        });
       }
 
-      allFood.push(...result.data);
+      setStore((current) => ({
+        ...current,
 
-      nextToken = result.nextToken ?? null;
-    } while (nextToken);
+        // Food comes from AWS.
+        days: cloudDays,
 
-    const cloudDays: Record<string, Day> = {};
+        // Leave vitals untouched here.
+        weights: current.weights,
+        bp: current.bp,
+      }));
 
-    for (const food of allFood) {
-      if (!cloudDays[food.date]) {
-        cloudDays[food.date] = {
-          date: food.date,
-          meals: [],
-        };
-      }
-
-      cloudDays[food.date].meals.push({
-        id: food.id,
-        name: food.name,
-        detail: food.notes ?? '',
-        kcal: food.calories,
-        protein: food.protein ?? 0,
-        carbs: food.carbs ?? 0,
-        fat: food.fat ?? 0,
-        fiber: food.fiber ?? 0,
-        quality: food.source ?? 'estimated',
-      });
+      console.log(
+        `Loaded ${allFood.length} food entries from AWS`
+      );
+    } catch (error) {
+      console.error('Cloud food load failed:', error);
     }
-
-    setStore((current) => ({
-      ...current,
-
-      // Food comes from AWS.
-      days: cloudDays,
-
-      // Leave vitals untouched here.
-      weights: current.weights,
-      bp: current.bp,
-    }));
-
-    console.log(
-      `Loaded ${allFood.length} food entries from AWS`
-    );
-  } catch (error) {
-    console.error('Cloud food load failed:', error);
-  }
-};
-
-/////////// 
-///////////
+  };
 
   const loadVitalsFromCloud = async () => {
-  try {
-    const allVitals: Schema['Vital']['type'][] = [];
+    try {
+      const allVitals: Schema['Vital']['type'][] = [];
 
-    let nextToken: string | null = null;
+      let nextToken: string | null = null;
 
-    do {
-      const result: ListPage<Schema['Vital']['type']> =
-        await client.models.Vital.list({
-          authMode: 'userPool',
-          limit: 100,
-          nextToken,
-        });
+      do {
+        const result: ListPage<Schema['Vital']['type']> =
+          await client.models.Vital.list({
+            authMode: 'userPool',
+            limit: 100,
+            nextToken,
+          });
 
-      if (result.errors?.length) {
-        console.error(
-          'Could not load cloud vitals:',
-          result.errors
-        );
-        return;
+        if (result.errors?.length) {
+          console.error(
+            'Could not load cloud vitals:',
+            result.errors
+          );
+          return;
+        }
+
+        allVitals.push(...result.data);
+
+        nextToken = result.nextToken ?? null;
+      } while (nextToken);
+
+      const weights: WeightEntry[] = [];
+      const bp: BPEntry[] = [];
+
+      for (const vital of allVitals) {
+        const date = new Date(vital.recordedAt)
+          .toLocaleDateString('en-CA');
+
+        if (vital.weightKg != null) {
+          weights.push({
+            date,
+            kg: vital.weightKg,
+          });
+        }
+
+        if (
+          vital.systolic != null &&
+          vital.diastolic != null
+        ) {
+          bp.push({
+            date,
+            sys: vital.systolic,
+            dia: vital.diastolic,
+          });
+        }
       }
 
-      allVitals.push(...result.data);
+      weights.sort((a, b) =>
+        a.date.localeCompare(b.date)
+      );
 
-      nextToken = result.nextToken ?? null;
-    } while (nextToken);
+      bp.sort((a, b) =>
+        a.date.localeCompare(b.date)
+      );
 
-    const weights: WeightEntry[] = [];
-    const bp: BPEntry[] = [];
+      setStore((current) => ({
+        ...current,
 
-    for (const vital of allVitals) {
-      const date = new Date(vital.recordedAt)
-        .toLocaleDateString('en-CA');
+        // Food remains untouched here.
+        days: current.days,
 
-      if (vital.weightKg != null) {
-        weights.push({
-          date,
-          kg: vital.weightKg,
-        });
-      }
+        // Vitals come from AWS.
+        weights,
+        bp,
+      }));
 
-      if (
-        vital.systolic != null &&
-        vital.diastolic != null
-      ) {
-        bp.push({
-          date,
-          sys: vital.systolic,
-          dia: vital.diastolic,
-        });
-      }
+      console.log(
+        `Loaded ${allVitals.length} vital records from AWS`,
+        {
+          weights: weights.length,
+          bloodPressure: bp.length,
+        }
+      );
+    } catch (error) {
+      console.error('Cloud vitals load failed:', error);
     }
-
-    weights.sort((a, b) =>
-      a.date.localeCompare(b.date)
-    );
-
-    bp.sort((a, b) =>
-      a.date.localeCompare(b.date)
-    );
-
-    setStore((current) => ({
-      ...current,
-
-      // Food remains untouched here.
-      days: current.days,
-
-      // Vitals come from AWS.
-      weights,
-      bp,
-    }));
-
-    console.log(
-      `Loaded ${allVitals.length} vital records from AWS`,
-      {
-        weights: weights.length,
-        bloodPressure: bp.length,
-      }
-    );
-  } catch (error) {
-    console.error('Cloud vitals load failed:', error);
-  }
-};
-////////////
+  };
 
   const saveVitals = async (
     kg: number,
@@ -367,14 +364,27 @@ function App({ signOut }: { signOut?: () => void }) {
 
 
 
-////////////
+  ////////////
 
-useEffect(() => {
-  loadFoodFromCloud();
-  loadVitalsFromCloud();
-}, []);
+  useEffect(() => {
+    loadFoodFromCloud();
+    loadVitalsFromCloud();
+  }, []);
 
-///////////
+
+  useEffect(() => {
+    const activeDate = document.querySelector(
+      '.daynav button.active'
+    );
+
+    activeDate?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [date]);
+
+  ///////////
   const removeMeal = async (id: string) => {
     try {
       const { errors } = await client.models.FoodEntry.delete(
@@ -429,13 +439,46 @@ useEffect(() => {
           <b>{theme === 'dark' ? 'LIGHT' : 'DARK'}</b>
         </button>
 
-                
+        <div className="mobileActions">
+          <button
+            className="mobileMenuButton"
+            onClick={() => setShowMobileMenu(!showMobileMenu)}
+            aria-label="Open menu"
+            aria-expanded={showMobileMenu}
+          >
+            •••
+          </button>
+
+          {showMobileMenu && (
+            <div className="mobileMenu">
+              <button
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowVitals(true);
+                }}
+              >
+                + VITALS
+              </button>
+
+              {signOut && (
+                <button
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    signOut();
+                  }}
+                >
+                  SIGN OUT
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {signOut && (
           <button className="ghost" onClick={signOut}>
             SIGN OUT
           </button>
         )}
-
       </div>
     </header>
 
@@ -496,19 +539,19 @@ useEffect(() => {
     )}
 
     {showVitals && (
-  <VitalsModal
-    latestW={latestW?.kg ?? 90.1}
-    onClose={() => setShowVitals(false)}
-    onSave={async (kg, sys, dia) => {
-      const saved = await saveVitals(kg, sys, dia);
+      <VitalsModal
+        latestW={latestW?.kg ?? 90.1}
+        onClose={() => setShowVitals(false)}
+        onSave={async (kg, sys, dia) => {
+          const saved = await saveVitals(kg, sys, dia);
 
-      if (saved) {
-        setShowVitals(false);
-      }
-    }}
-  />
-)}
-  
+          if (saved) {
+            setShowVitals(false);
+          }
+        }}
+      />
+    )}
+
   </main>
 }
 
@@ -540,11 +583,11 @@ function FoodModal({
 
   const field =
     (k: keyof typeof f) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setF({
-        ...f,
-        [k]: e.target.value,
-      });
+      (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+        setF({
+          ...f,
+          [k]: e.target.value,
+        });
 
   return (
     <div
