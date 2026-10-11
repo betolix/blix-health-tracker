@@ -1,3 +1,4 @@
+import { RemovalPolicy } from 'aws-cdk-lib';
 import { defineBackend } from '@aws-amplify/backend';
 import {
   OAuthScope,
@@ -11,6 +12,10 @@ const backend = defineBackend({
   auth,
   data,
 });
+
+// Protect the production Cognito user pool from accidental deletion.
+backend.auth.resources.cfnResources.cfnUserPool.deletionProtection = 'ACTIVE';
+backend.auth.resources.userPool.applyRemovalPolicy(RemovalPolicy.RETAIN);
 
 // Cognito hosted login for Auth0 federation.
 backend.auth.resources.userPool.addDomain('BlixOAuthDomain', {
