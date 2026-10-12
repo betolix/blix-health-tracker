@@ -555,6 +555,142 @@ function App({ signOut }: { signOut?: () => void }) {
   </main>
 }
 
+function OwnershipProbeRunner({ signOut }: { signOut?: () => void }) {
+  type Probe = Schema['OwnershipProbe']['type'];
+
+  const [probes, setProbes] = useState<Probe[]>([]);
+  const [probeId, setProbeId] = useState('');
+  const [directResult, setDirectResult] = useState<string>('Not tested');
+  const [status, setStatus] = useState('Ready');
+
+  const createProbe = async () => {
+    setStatus('Creating synthetic probe...');
+
+    const { data, errors } = await client.models.OwnershipProbe.create(
+      { label: 'synthetic-ownership-probe' },
+      { authMode: 'userPool' }
+    );
+
+    if (errors?.length || !data) {
+      console.error('OwnershipProbe create failed:', errors);
+      setStatus('CREATE FAILED');
+      return;
+    }
+
+    setProbeId(data.id);
+    setStatus(`Created probe: ${data.id}`);
+  };
+
+  const listVisibleProbes = async () => {
+    setStatus('Listing visible probes...');
+
+    const { data, errors } = await client.models.OwnershipProbe.list({
+      authMode: 'userPool',
+      limit: 100,
+    });
+
+    if (errors?.length) {
+      console.error('OwnershipProbe list failed:', errors);
+      setStatus('LIST FAILED');
+      return;
+    }
+
+    setProbes(data);
+    setStatus(`Visible probes: ${data.length}`);
+  };
+
+  const getProbeById = async () => {
+    if (!probeId.trim()) {
+      setDirectResult('Enter a probe ID first.');
+      return;
+    }
+
+    setStatus('Testing direct read by ID...');
+
+    const { data, errors } = await client.models.OwnershipProbe.get(
+      { id: probeId.trim() },
+      { authMode: 'userPool' }
+    );
+
+    if (errors?.length) {
+      console.error('OwnershipProbe direct read errors:', errors);
+      setDirectResult('DENIED / NOT VISIBLE');
+      setStatus('Direct-read test completed');
+      return;
+    }
+
+    if (!data) {
+      setDirectResult('DENIED / NOT VISIBLE');
+      setStatus('Direct-read test completed');
+      return;
+    }
+
+    setDirectResult(
+      `VISIBLE — id=${data.id} | label=${data.label} | owner=${data.owner ?? '—'}`
+    );
+    setStatus('Direct-read test completed');
+  };
+
+  return (
+    <main style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
+      <h1>Ownership Isolation Probe</h1>
+
+      <p>
+        Synthetic test only. This screen does not load FoodEntry, Vital,
+        or DailyTarget.
+      </p>
+
+      <p><strong>Status:</strong> {status}</p>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+        <button onClick={createProbe}>CREATE SYNTHETIC PROBE</button>
+        <button onClick={listVisibleProbes}>LIST MY VISIBLE PROBES</button>
+        {signOut && <button onClick={signOut}>SIGN OUT</button>}
+      </div>
+
+      <h2>Visible probes</h2>
+
+      {probes.length === 0 ? (
+        <p>None loaded.</p>
+      ) : (
+        <ul>
+          {probes.map((probe) => (
+            <li key={probe.id}>
+              <strong>ID:</strong> {probe.id}
+              <br />
+              <strong>Label:</strong> {probe.label}
+              <br />
+              <strong>Owner:</strong> {probe.owner ?? '—'}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <hr style={{ margin: '32px 0' }} />
+
+      <h2>Direct isolation test</h2>
+
+      <p>
+        Enter a synthetic OwnershipProbe ID to test whether the currently
+        authenticated user can read that exact record.
+      </p>
+
+      <input
+        value={probeId}
+        onChange={(e) => setProbeId(e.target.value)}
+        placeholder="OwnershipProbe ID"
+        style={{ width: '100%', padding: 10, marginBottom: 12 }}
+      />
+
+      <button onClick={getProbeById}>TEST DIRECT READ</button>
+
+      <p>
+        <strong>Result:</strong> {directResult}
+      </p>
+    </main>
+  );
+}
+
 function Metric({ n, v, max, unit }: { n: string; v: number; max: number; unit: string }) { const pct = Math.min(100, v / max * 100); return <div className="metric"><div><b>{n}</b><span>{Math.round(v)} / {max} {unit}</span></div><div className="bar"><i style={{ width: `${pct}%` }} /></div></div> }
 function Spark({ data, target }: { data: { label: string, value: number }[]; target: number }) { if (data.length < 2) return null; const w = 520, h = 150, p = 14, min = Math.min(target, ...data.map(d => d.value)) - 1, max = Math.max(...data.map(d => d.value)) + 1; const pts = data.map((d, i) => `${p + i * (w - 2 * p) / (data.length - 1)},${p + (max - d.value) * (h - 2 * p) / (max - min)}`).join(' '); const ty = p + (max - target) * (h - 2 * p) / (max - min); return <div className="spark"><svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Weight trend"><line x1={p} y1={ty} x2={w - p} y2={ty} className="goalLine" /><polyline points={pts} />{data.map((d, i) => { const [x, y] = pts.split(' ')[i].split(','); return <circle key={i} cx={x} cy={y} r="4" /> })}</svg><div className="chartLabels"><span>{data[0].label} · {data[0].value.toFixed(1)}</span><b>{data.at(-1)!.value.toFixed(1)} kg</b><span>{data.at(-1)!.label}</span></div></div> }
 function BPChart({ data }: { data: BPEntry[] }) { return <div className="bpRows">{data.slice(-4).reverse().map((b, i) => <div key={i}><span>{fmtDate(b.date)}</span><b>{b.sys}/{b.dia}</b><i style={{ width: `${Math.min(100, b.sys / 180 * 100)}%` }} /></div>)}</div> }
@@ -718,12 +854,19 @@ function FoodModal({
 
 function VitalsModal({ latestW, onClose, onSave }: { latestW: number; onClose: () => void; onSave: (kg: number, sys: number, dia: number) => Promise<void> }) { const [kg, setKg] = useState(String(latestW)); const [sys, setSys] = useState(''); const [dia, setDia] = useState(''); return <div className="overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}><form className="modal small" onSubmit={e => { e.preventDefault(); onSave(+kg, +sys, +dia) }}><div className="modalHead"><h2>Add today's vitals</h2><button type="button" onClick={onClose}>×</button></div><label>Weight (kg)<input type="number" step="0.1" value={kg} onChange={e => setKg(e.target.value)} /></label><div className="formGrid two"><label>Systolic<input type="number" value={sys} onChange={e => setSys(e.target.value)} placeholder="e.g. 135" /></label><label>Diastolic<input type="number" value={dia} onChange={e => setDia(e.target.value)} placeholder="e.g. 88" /></label></div><button className="primary">SAVE VITALS</button></form></div> }
 
+const ownershipProbeMode =
+  new URLSearchParams(window.location.search).get('ownership-probe') === '1';
+
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <Authenticator>
-      {({ signOut }) => (
-        <App signOut={signOut} />
-      )}
+      {({ signOut }) =>
+        ownershipProbeMode ? (
+          <OwnershipProbeRunner signOut={signOut} />
+        ) : (
+          <App signOut={signOut} />
+        )
+      }
     </Authenticator>
   </React.StrictMode>
 );
