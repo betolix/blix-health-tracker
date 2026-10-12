@@ -37,6 +37,22 @@ function getAuthorizationHeader(
 }
 
 export const handler = async (event: HttpEvent) => {
+  // Fail closed. The public endpoint may exist, but MCP processing remains
+  // disabled until authentication and authorization are explicitly enabled.
+  if (process.env.BLIX_MCP_ENABLED !== 'true') {
+    return {
+      statusCode: 503,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      },
+      body: JSON.stringify({
+        error: 'service_unavailable',
+        message: 'Blix MCP is not enabled.',
+      }),
+    };
+  }
+
   const authorization = getAuthorizationHeader(event.headers);
 
   if (!authorization?.startsWith('Bearer ')) {
