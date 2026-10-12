@@ -68,6 +68,18 @@ const schema = a.schema({
     .authorization((allow) => [
       allow.owner(),
     ]),
+
+    OwnershipProbe: a
+    .model({
+      label: a.string().required(),
+
+      owner: a.string().authorization((allow) => [
+        allow.owner().to(['read', 'delete']),
+      ]),
+    })
+    .authorization((allow) => [
+      allow.owner(),
+    ]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
