@@ -1,4 +1,40 @@
-export const handler = async () => {
+const RESOURCE =
+  'https://xa2eims733qub3334xn6yky7re0ytosu.lambda-url.us-east-1.on.aws/';
+
+const AUTH0_ISSUER =
+  'https://dev-0nvmmicnskv1kx50.us.auth0.com/';
+
+type LambdaEvent = {
+  rawPath?: string;
+  requestContext?: {
+    http?: {
+      method?: string;
+    };
+  };
+};
+
+export const handler = async (event: LambdaEvent) => {
+  const method = event?.requestContext?.http?.method;
+  const path = event?.rawPath;
+
+  if (
+    method === 'GET' &&
+    path === '/.well-known/oauth-protected-resource'
+  ) {
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      },
+      body: JSON.stringify({
+        resource: RESOURCE,
+        authorization_servers: [AUTH0_ISSUER],
+      }),
+    };
+  }
+
+  // MCP remains completely disabled.
   return {
     statusCode: 503,
     headers: {
