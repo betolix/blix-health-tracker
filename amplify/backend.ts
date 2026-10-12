@@ -1,3 +1,5 @@
+import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
+import { blixMcp } from './functions/blix-mcp/resource';
 import { RemovalPolicy } from 'aws-cdk-lib';
 import { defineBackend } from '@aws-amplify/backend';
 import {
@@ -11,6 +13,11 @@ import { data } from './data/resource';
 const backend = defineBackend({
   auth,
   data,
+  blixMcp,
+});
+
+backend.blixMcp.resources.lambda.addFunctionUrl({
+  authType: FunctionUrlAuthType.NONE,
 });
 
 // Protect the production Cognito user pool from accidental deletion.
