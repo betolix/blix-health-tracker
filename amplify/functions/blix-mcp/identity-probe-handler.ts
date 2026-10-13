@@ -44,68 +44,78 @@ function bearerToken(headers: HttpEvent['headers']): string | undefined {
   return match?.[1];
 }
 
-export const handler = async (event: HttpEvent) => {
-  const method = event.requestContext?.http?.method;
-  const path = event.rawPath;
+type ProbeVerifier = (
+  token: string
+) => Promise<{ fingerprint: string }>;
 
-  if (method === 'GET' && path === '/.well-known/oauth-protected-resource') {
-    return disabledHandler(event);
-  }
-  if (path !== '/mcp') {
-    return disabledHandler(event);
-  }
-  if (method !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: { Allow: 'POST', 'Cache-Control': 'no-store' },
-      body: '',
-    };
-  }
+export function createIdentityProbeHandler(
+  verifyToken: ProbeVerifier = verifyIdentityProbeToken
+) {
+  return async (event: HttpEvent) => {
+    const method = event.requestContext?.http?.method;
+    const path = event.rawPath;
 
-  const token = bearerToken(event.headers);
-  if (!token) return errorResponse(401, 'unauthorized');
+    if (method === 'GET' && path === '/.well-known/oauth-protected-resource') {
+      return disabledHandler(event);
+    }
+    if (path !== '/mcp') {
+      return disabledHandler(event);
+    }
+    if (method !== 'POST') {
+      return {
+        statusCode: 405,
+        headers: { Allow: 'POST', 'Cache-Control': 'no-store' },
+        body: '',
+      };
+    }
 
-  let fingerprint: string;
-  try {
-    ({ fingerprint } = await verifyIdentityProbeToken(token));
-  } catch (error) {
-    return errorResponse(
-      error instanceof InsufficientProbeScopeError ? 403 : 401,
-      error instanceof InsufficientProbeScopeError
-        ? 'insufficient_scope'
-        : 'unauthorized'
-    );
-  }
+    const token = bearerToken(event.headers);
+    if (!token) return errorResponse(401, 'unauthorized');
 
-  const server = createIdentityProbeServer(fingerprint);
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-    enableJsonResponse: true,
-  });
+    let fingerprint: string;
+    try {
+      ({ fingerprint } = await verifyToken(token));
+    } catch (error) {
+      return errorResponse(
+        error instanceof InsufficientProbeScopeError ? 403 : 401,
+        error instanceof InsufficientProbeScopeError
+          ? 'insufficient_scope'
+          : 'unauthorized'
+      );
+    }
 
-  try {
-    await server.connect(transport);
-    const body = event.body == null
-      ? undefined
-      : event.isBase64Encoded
-        ? Buffer.from(event.body, 'base64')
-        : event.body;
-    const request = new Request(`${MCP_RESOURCE}mcp`, {
-      method: 'POST',
-      headers: event.headers as Record<string, string> | undefined,
-      body,
+    const server = createIdentityProbeServer(fingerprint);
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
     });
-    const response = await transport.handleRequest(request);
-    const responseBody = await response.text();
-    return {
-      statusCode: response.status,
-      headers: {
-        ...Object.fromEntries(response.headers.entries()),
-        'Cache-Control': 'no-store',
-      },
-      body: responseBody,
-    };
-  } finally {
-    await server.close();
-  }
-};
+
+    try {
+      await server.connect(transport);
+      const body = event.body == null
+        ? undefined
+        : event.isBase64Encoded
+          ? Buffer.from(event.body, 'base64')
+          : event.body;
+      const request = new Request(`${MCP_RESOURCE}mcp`, {
+        method: 'POST',
+        headers: event.headers as Record<string, string> | undefined,
+        body,
+      });
+      const response = await transport.handleRequest(request);
+      const responseBody = await response.text();
+      return {
+        statusCode: response.status,
+        headers: {
+          ...Object.fromEntries(response.headers.entries()),
+          'Cache-Control': 'no-store',
+        },
+        body: responseBody,
+      };
+    } finally {
+      await server.close();
+    }
+  };
+}
+
+export const handler = createIdentityProbeHandler();
