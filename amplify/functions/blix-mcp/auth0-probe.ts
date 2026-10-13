@@ -48,7 +48,13 @@ export function createIdentityProbeVerifier(jwksCache?: JwksCache) {
         // Auth0 custom API access tokens identify the OAuth client with azp.
         // Never accept an arbitrary third-party Auth0 client for this probe.
         if (payload.azp !== requiredClientId()) {
-          throw new Error('Unexpected OAuth client');
+          if (payload.azp == null) {
+            throw new Error('OAuth client missing');
+          }
+          if (payload.azp === 'https://chatgpt.com/oauth/client.json') {
+            throw new Error('OAuth client is ChatGPT CIMD');
+          }
+          throw new Error('OAuth client is other');
         }
       },
     },
