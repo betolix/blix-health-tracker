@@ -1,5 +1,17 @@
 import { createMcpHandler } from '@modelcontextprotocol/server';
 import {
+  FetchError,
+  JwtExpiredError,
+  JwtInvalidAudienceError,
+  JwtInvalidIssuerError,
+  JwtInvalidSignatureAlgorithmError,
+  JwtInvalidSignatureError,
+  JwtNotBeforeError,
+  JwtParseError,
+  JwtWithoutValidKidError,
+  KidNotFoundInJwksError,
+} from 'aws-jwt-verify/error';
+import {
   InsufficientProbeScopeError,
   MCP_RESOURCE,
   PROBE_SCOPE,
@@ -17,6 +29,34 @@ type HttpEvent = {
   requestContext?: { http?: { method?: string } };
 };
 
+function classifyAuthFailure(error: unknown): string {
+  if (error instanceof InsufficientProbeScopeError) return 'scope';
+  if (error instanceof JwtInvalidAudienceError) return 'audience';
+  if (error instanceof JwtInvalidIssuerError) return 'issuer';
+  if (error instanceof JwtExpiredError) return 'expired';
+  if (error instanceof JwtNotBeforeError) return 'not-before';
+  if (error instanceof JwtInvalidSignatureError) return 'signature';
+  if (error instanceof JwtInvalidSignatureAlgorithmError) return 'algorithm';
+  if (error instanceof JwtParseError) return 'jwt-format';
+  if (
+    error instanceof JwtWithoutValidKidError ||
+    error instanceof KidNotFoundInJwksError
+  ) return 'jwks-key';
+  if (error instanceof FetchError) return 'jwks-fetch';
+
+  if (error instanceof Error) {
+    switch (error.message) {
+      case 'Unexpected OAuth client': return 'oauth-client';
+      case 'Required JWT timestamps missing': return 'timestamps';
+      case 'Missing authenticated subject': return 'subject';
+      case 'Unexpected JWT algorithm': return 'algorithm';
+      case 'Missing BLIX_AUTH0_CIMD_CLIENT_ID': return 'configuration';
+    }
+  }
+
+  return 'other';
+}
+
 function safeDiagnosticLog(details: {
   stage: string;
   method?: string;
@@ -24,6 +64,7 @@ function safeDiagnosticLog(details: {
   authHeaderCount?: number;
   operation?: string;
   rpcMethod?: string;
+  authFailure?: string;
   status?: number;
 }) {
   console.info('[blix-mcp-diagnostic]', JSON.stringify(details));
@@ -169,10 +210,22 @@ export function createIdentityProbeHandler(
     if (authHeaders.length > 0) {
       // A supplied, malformed/ambiguous/invalid token must never be ignored.
       const token = bearerToken(event.headers);
-      if (!token) return errorResponse(401, 'unauthorized');
+      if (!token) {
+        safeDiagnosticLog({
+          stage: 'auth-rejection',
+          authFailure: 'bearer-format',
+          status: 401,
+        });
+        return errorResponse(401, 'unauthorized');
+      }
       try {
         ({ fingerprint } = await verifyToken(token));
       } catch (error) {
+        safeDiagnosticLog({
+          stage: 'auth-rejection',
+          authFailure: classifyAuthFailure(error),
+          status: error instanceof InsufficientProbeScopeError ? 403 : 401,
+        });
         return errorResponse(
           error instanceof InsufficientProbeScopeError ? 403 : 401,
           error instanceof InsufficientProbeScopeError
