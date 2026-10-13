@@ -78,10 +78,10 @@ async function main() {
   assert.equal(listing.status, 200, 'Modern tools/list failed');
   assert.deepEqual(
     listing.data?.result?.tools?.map((tool: any) => tool.name),
-    ['identity_probe'],
+    ['identity_probe', 'ownership_probe'],
     'Unexpected tools exposed'
   );
-  console.log('PASS: only identity_probe exposed');
+  console.log('PASS: only two synthetic probes exposed');
 
   const anonymous = await rpc('tools/call', {
     name: 'identity_probe',

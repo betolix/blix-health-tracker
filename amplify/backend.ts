@@ -1,4 +1,5 @@
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { blixMcp } from './functions/blix-mcp/resource';
 import { RemovalPolicy } from 'aws-cdk-lib';
 import { defineBackend } from '@aws-amplify/backend';
@@ -19,6 +20,18 @@ const backend = defineBackend({
 backend.blixMcp.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
+
+// Synthetic-only probe: this Lambda gets Scan on OwnershipProbe, and no
+// permissions to the FoodEntry, Vital, or DailyTarget DynamoDB tables.
+const ownershipProbeTable = backend.data.resources.tables['OwnershipProbe'];
+backend.blixMcp.resources.lambda.addToRolePolicy(new PolicyStatement({
+  actions: ['dynamodb:Scan'],
+  resources: [ownershipProbeTable.tableArn],
+}));
+backend.blixMcp.resources.lambda.addEnvironment(
+  'OWNERSHIP_PROBE_TABLE_NAME',
+  ownershipProbeTable.tableName,
+);
 
 // Protect the production Cognito user pool from accidental deletion.
 backend.auth.resources.cfnResources.cfnUserPool.deletionProtection = 'ACTIVE';
