@@ -26,9 +26,9 @@ invalid/insufficient credentials, and successful synthetic authenticated call.
 Existing synthetic tests should also be rerun.
 
 ## Important remaining steps
-- Execute the synthetic test suite and isolated TypeScript compilation in the
-  actual repository with installed dependencies. Tests are not yet claimed to
-  have passed: this preparation environment has no repo dependencies.
+- All five synthetic test suites passed in the actual repository with installed
+  dependencies, including the mixed-auth discovery tests.
+- `npx --no-install tsc --noEmit` completed with no errors.
 - The ChatGPT plugin was created with **OAuth**, not **OAuth or no authentication**.
   After a separately approved deployment, the plugin may need to be recreated
   or reconfigured for mixed auth. Do not change scopes: only `openid` and
