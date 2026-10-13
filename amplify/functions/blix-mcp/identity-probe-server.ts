@@ -1,8 +1,4 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { Server } from "@modelcontextprotocol/server";
 import { MCP_RESOURCE, PROBE_SCOPE } from './auth0-probe';
 
 const securitySchemes = [
@@ -28,7 +24,7 @@ export function createIdentityProbeServer(fingerprint?: string) {
     }
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  server.setRequestHandler('tools/list', async () => ({
     tools: [
       {
         name: 'identity_probe',
@@ -53,7 +49,7 @@ export function createIdentityProbeServer(fingerprint?: string) {
     ],
   }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler('tools/call', async (request) => {
     if (request.params.name !== 'identity_probe') {
       throw new Error('Unknown tool');
     }

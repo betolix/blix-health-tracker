@@ -1,5 +1,4 @@
-import { WebStandardStreamableHTTPServerTransport } from
-  '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import { createMcpHandler } from '@modelcontextprotocol/server';
 import {
   InsufficientProbeScopeError,
   MCP_RESOURCE,
@@ -78,6 +77,7 @@ function anonymousMcpOperation(body: string | undefined):
     };
     if (message.jsonrpc !== '2.0') return undefined;
     if (
+      message.method === 'server/discover' ||
       message.method === 'initialize' ||
       message.method === 'tools/list' ||
       message.method === 'notifications/initialized'
@@ -184,20 +184,21 @@ export function createIdentityProbeHandler(
       return errorResponse(401, 'unauthorized');
     }
 
-    const server = createIdentityProbeServer(fingerprint);
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true,
-    });
+    // MCP v2 serves both the 2026 discovery protocol and legacy clients.
+    // A fresh server is constructed for this request only.
+    const mcp = createMcpHandler(
+      () => createIdentityProbeServer(fingerprint),
+      { responseMode: 'json' }
+    );
 
     try {
-      await server.connect(transport);
       const request = new Request(`${MCP_RESOURCE}mcp`, {
         method: 'POST',
         headers: event.headers as Record<string, string> | undefined,
         body,
       });
-      const response = await transport.handleRequest(request);
+
+      const response = await mcp.fetch(request);
       const responseBody = await response.text();
 
       safeDiagnosticLog({
@@ -217,7 +218,7 @@ export function createIdentityProbeHandler(
         body: responseBody,
       };
     } finally {
-      await server.close();
+      await mcp.close();
     }
   };
 }
