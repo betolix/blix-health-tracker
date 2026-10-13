@@ -18,9 +18,25 @@ type HttpEvent = {
   requestContext?: { http?: { method?: string } };
 };
 
+function safeDiagnosticLog(details: {
+  stage: string;
+  method?: string;
+  path?: string;
+  authHeaderCount?: number;
+  operation?: string;
+  status?: number;
+}) {
+  console.info('[blix-mcp-diagnostic]', JSON.stringify(details));
+}
+
 const RESOURCE_METADATA = `${MCP_RESOURCE}.well-known/oauth-protected-resource`;
 
 function errorResponse(statusCode: number, error: string) {
+  safeDiagnosticLog({
+    stage: 'auth-error-response',
+    status: statusCode,
+  });
+
   return {
     statusCode,
     headers: {
@@ -93,6 +109,15 @@ export function createIdentityProbeHandler(
     const method = event.requestContext?.http?.method;
     const path = event.rawPath;
 
+    safeDiagnosticLog({
+      stage: 'request',
+      method,
+      path,
+      authHeaderCount: Object.entries(event.headers ?? {}).filter(
+        ([name]) => name.toLowerCase() === 'authorization'
+      ).length,
+    });
+
     if (method === 'GET' && path === '/.well-known/oauth-protected-resource') {
       return disabledHandler(event);
     }
@@ -116,6 +141,15 @@ export function createIdentityProbeHandler(
     const authHeaders = Object.entries(event.headers ?? {}).filter(
       ([name]) => name.toLowerCase() === 'authorization'
     );
+
+    safeDiagnosticLog({
+      stage: 'mcp-operation',
+      method,
+      path,
+      authHeaderCount: authHeaders.length,
+      operation: anonymousOperation ?? 'protected-or-unrecognized',
+    });
+
 
     let fingerprint: string | undefined;
     if (authHeaders.length > 0) {
@@ -151,6 +185,15 @@ export function createIdentityProbeHandler(
       });
       const response = await transport.handleRequest(request);
       const responseBody = await response.text();
+
+      safeDiagnosticLog({
+        stage: 'mcp-response',
+        method,
+        path,
+        operation: anonymousOperation ?? 'authenticated-or-unrecognized',
+        status: response.status,
+      });
+
       return {
         statusCode: response.status,
         headers: {
