@@ -1,6 +1,4 @@
-import { WebStandardStreamableHTTPServerTransport }
-  from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
 import { createBlixMcpServer } from './server';
 
 // Internal transport implementation.
