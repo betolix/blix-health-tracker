@@ -24,6 +24,7 @@ function safeDiagnosticLog(details: {
   path?: string;
   authHeaderCount?: number;
   operation?: string;
+  rpcMethod?: string;
   status?: number;
 }) {
   console.info('[blix-mcp-diagnostic]', JSON.stringify(details));
@@ -138,6 +139,18 @@ export function createIdentityProbeHandler(
         ? Buffer.from(event.body, 'base64').toString('utf8')
         : event.body;
     const anonymousOperation = anonymousMcpOperation(body);
+    let rpcMethod: string | undefined;
+    try {
+      const rpc: unknown = body ? JSON.parse(body) : undefined;
+      if (rpc && typeof rpc === 'object' && !Array.isArray(rpc)) {
+        const candidate = (rpc as { method?: unknown }).method;
+        if (typeof candidate === 'string') {
+          rpcMethod = candidate;
+        }
+      }
+    } catch {
+      // Diagnostic only: never log the body or parsing error contents.
+    }
     const authHeaders = Object.entries(event.headers ?? {}).filter(
       ([name]) => name.toLowerCase() === 'authorization'
     );
@@ -148,6 +161,7 @@ export function createIdentityProbeHandler(
       path,
       authHeaderCount: authHeaders.length,
       operation: anonymousOperation ?? 'protected-or-unrecognized',
+      rpcMethod,
     });
 
 
