@@ -9,8 +9,7 @@ import {
 import { handler as disabledHandler } from './disabled-handler';
 import { createIdentityProbeServer } from './identity-probe-server';
 
-// NOT an Amplify entry point. resource.ts must continue pointing to
-// disabled-handler.ts until separate explicit approval to deploy.
+// Deployed by resource.ts. This handler exposes only the synthetic identity probe.
 type HttpEvent = {
   rawPath?: string;
   body?: string | null;
@@ -44,6 +43,45 @@ function bearerToken(headers: HttpEvent['headers']): string | undefined {
   return match?.[1];
 }
 
+// Only these protocol operations disclose public, non-user-specific metadata.
+// All other requests remain protected, except an anonymous call to the sole
+// identity_probe tool, which returns an MCP auth challenge (never a fingerprint).
+function anonymousMcpOperation(body: string | undefined):
+  'discovery' | 'probe-challenge' | undefined {
+  if (!body) return undefined;
+  try {
+    const rpc: unknown = JSON.parse(body);
+    if (!rpc || typeof rpc !== 'object' || Array.isArray(rpc)) {
+      return undefined;
+    }
+    const message = rpc as {
+      jsonrpc?: unknown;
+      method?: unknown;
+      params?: unknown;
+    };
+    if (message.jsonrpc !== '2.0') return undefined;
+    if (
+      message.method === 'initialize' ||
+      message.method === 'tools/list' ||
+      message.method === 'notifications/initialized'
+    ) {
+      return 'discovery';
+    }
+    if (message.method === 'tools/call') {
+      const params = message.params;
+      if (
+        params && typeof params === 'object' && !Array.isArray(params) &&
+        (params as { name?: unknown }).name === 'identity_probe'
+      ) {
+        return 'probe-challenge';
+      }
+    }
+  } catch {
+    // Invalid JSON never bypasses authentication.
+  }
+  return undefined;
+}
+
 type ProbeVerifier = (
   token: string
 ) => Promise<{ fingerprint: string }>;
@@ -69,19 +107,33 @@ export function createIdentityProbeHandler(
       };
     }
 
-    const token = bearerToken(event.headers);
-    if (!token) return errorResponse(401, 'unauthorized');
+    const body = event.body == null
+      ? undefined
+      : event.isBase64Encoded
+        ? Buffer.from(event.body, 'base64').toString('utf8')
+        : event.body;
+    const anonymousOperation = anonymousMcpOperation(body);
+    const authHeaders = Object.entries(event.headers ?? {}).filter(
+      ([name]) => name.toLowerCase() === 'authorization'
+    );
 
-    let fingerprint: string;
-    try {
-      ({ fingerprint } = await verifyToken(token));
-    } catch (error) {
-      return errorResponse(
-        error instanceof InsufficientProbeScopeError ? 403 : 401,
-        error instanceof InsufficientProbeScopeError
-          ? 'insufficient_scope'
-          : 'unauthorized'
-      );
+    let fingerprint: string | undefined;
+    if (authHeaders.length > 0) {
+      // A supplied, malformed/ambiguous/invalid token must never be ignored.
+      const token = bearerToken(event.headers);
+      if (!token) return errorResponse(401, 'unauthorized');
+      try {
+        ({ fingerprint } = await verifyToken(token));
+      } catch (error) {
+        return errorResponse(
+          error instanceof InsufficientProbeScopeError ? 403 : 401,
+          error instanceof InsufficientProbeScopeError
+            ? 'insufficient_scope'
+            : 'unauthorized'
+        );
+      }
+    } else if (!anonymousOperation) {
+      return errorResponse(401, 'unauthorized');
     }
 
     const server = createIdentityProbeServer(fingerprint);
@@ -92,11 +144,6 @@ export function createIdentityProbeHandler(
 
     try {
       await server.connect(transport);
-      const body = event.body == null
-        ? undefined
-        : event.isBase64Encoded
-          ? Buffer.from(event.body, 'base64')
-          : event.body;
       const request = new Request(`${MCP_RESOURCE}mcp`, {
         method: 'POST',
         headers: event.headers as Record<string, string> | undefined,
