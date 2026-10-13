@@ -27,10 +27,10 @@ async function main() {
 
     try {
       const listed = await client.listTools();
-      assert(listed.tools.length === 1, 'Expected exactly one tool');
+      assert(listed.tools.length === 2, 'Expected exactly two synthetic tools');
 
-      const tool = listed.tools[0];
-      assert(tool.name === 'identity_probe', 'Unexpected tool');
+      const tool = listed.tools.find((candidate) => candidate.name === 'identity_probe');
+      assert(tool?.name === 'identity_probe', 'Identity probe missing');
 
       const schemes = (
         tool._meta as {

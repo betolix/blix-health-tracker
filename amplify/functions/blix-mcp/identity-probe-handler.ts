@@ -128,7 +128,8 @@ function anonymousMcpOperation(body: string | undefined):
       const params = message.params;
       if (
         params && typeof params === 'object' && !Array.isArray(params) &&
-        (params as { name?: unknown }).name === 'identity_probe'
+        ((params as { name?: unknown }).name === 'identity_probe' ||
+         (params as { name?: unknown }).name === 'ownership_probe')
       ) {
         return 'probe-challenge';
       }
@@ -141,7 +142,7 @@ function anonymousMcpOperation(body: string | undefined):
 
 type ProbeVerifier = (
   token: string
-) => Promise<{ fingerprint: string }>;
+) => Promise<{ fingerprint: string; verifiedSubject: string }>;
 
 export function createIdentityProbeHandler(
   verifyToken: ProbeVerifier = verifyIdentityProbeToken
@@ -206,6 +207,7 @@ export function createIdentityProbeHandler(
 
 
     let fingerprint: string | undefined;
+    let verifiedSubject: string | undefined;
     if (authHeaders.length > 0) {
       // A supplied, malformed/ambiguous/invalid token must never be ignored.
       const token = bearerToken(event.headers);
@@ -218,7 +220,7 @@ export function createIdentityProbeHandler(
         return errorResponse(401, 'unauthorized');
       }
       try {
-        ({ fingerprint } = await verifyToken(token));
+        ({ fingerprint, verifiedSubject } = await verifyToken(token));
       } catch (error) {
         safeDiagnosticLog({
           stage: 'auth-rejection',
@@ -239,7 +241,7 @@ export function createIdentityProbeHandler(
     // MCP v2 serves both the 2026 discovery protocol and legacy clients.
     // A fresh server is constructed for this request only.
     const mcp = createMcpHandler(
-      () => createIdentityProbeServer(fingerprint),
+      () => createIdentityProbeServer(fingerprint, verifiedSubject),
       { responseMode: 'json' }
     );
 

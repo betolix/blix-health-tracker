@@ -66,10 +66,14 @@ export async function verifyIdentityProbeToken(
 
   // Opaque, stable probe identifier: do not expose email, JWT or raw sub.
   // This is NOT an Auth0 -> Cognito owner mapping.
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
   const fingerprint = createHash('sha256')
-    .update(`blix-identity-probe-v1:${payload.sub}`)
+    .update(`blix-identity-probe-v1:${verifiedSubject}`)
     .digest('hex')
     .slice(0, 24);
 
-  return { fingerprint };
+  return { fingerprint, verifiedSubject };
 }
