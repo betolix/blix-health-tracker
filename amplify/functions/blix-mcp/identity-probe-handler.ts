@@ -47,13 +47,9 @@ function classifyAuthFailure(error: unknown): string {
   if (error instanceof Error) {
     switch (error.message) {
       case 'Unexpected OAuth client': return 'oauth-client';
-      case 'OAuth client missing': return 'oauth-client-missing';
-      case 'OAuth client is ChatGPT CIMD': return 'oauth-client-cimd';
-      case 'OAuth client is other': return 'oauth-client-other';
       case 'Required JWT timestamps missing': return 'timestamps';
       case 'Missing authenticated subject': return 'subject';
       case 'Unexpected JWT algorithm': return 'algorithm';
-      case 'Missing BLIX_AUTH0_CIMD_CLIENT_ID': return 'configuration';
     }
   }
 

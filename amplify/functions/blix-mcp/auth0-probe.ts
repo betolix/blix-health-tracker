@@ -8,20 +8,13 @@ export const AUTH0_ISSUER =
 export const MCP_RESOURCE =
   'https://xa2eims733qub3334xn6yky7re0ytosu.lambda-url.us-east-1.on.aws/';
 export const PROBE_SCOPE = 'probe:identity';
+export const CHATGPT_CIMD_CLIENT_ID =
+  'https://chatgpt.com/oauth/client.json';
 
 export class InsufficientProbeScopeError extends Error {
   constructor() {
     super('Insufficient probe scope');
   }
-}
-
-function requiredClientId(): string {
-  const clientId = process.env.BLIX_AUTH0_CIMD_CLIENT_ID;
-  if (!clientId || !clientId.trim()) {
-    // Fail closed if the expected Auth0 client is not pinned.
-    throw new Error('Missing BLIX_AUTH0_CIMD_CLIENT_ID');
-  }
-  return clientId;
 }
 
 export function createIdentityProbeVerifier(jwksCache?: JwksCache) {
@@ -45,16 +38,10 @@ export function createIdentityProbeVerifier(jwksCache?: JwksCache) {
         if (typeof payload.sub !== 'string' || !payload.sub.trim()) {
           throw new Error('Missing authenticated subject');
         }
-        // Auth0 custom API access tokens identify the OAuth client with azp.
+        // Pin the OAuth client to ChatGPT's CIMD identifier.
         // Never accept an arbitrary third-party Auth0 client for this probe.
-        if (payload.azp !== requiredClientId()) {
-          if (payload.azp == null) {
-            throw new Error('OAuth client missing');
-          }
-          if (payload.azp === 'https://chatgpt.com/oauth/client.json') {
-            throw new Error('OAuth client is ChatGPT CIMD');
-          }
-          throw new Error('OAuth client is other');
+        if (payload.azp !== CHATGPT_CIMD_CLIENT_ID) {
+          throw new Error('Unexpected OAuth client');
         }
       },
     },
