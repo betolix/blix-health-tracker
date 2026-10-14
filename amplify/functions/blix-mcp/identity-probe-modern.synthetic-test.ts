@@ -63,7 +63,54 @@ async function rpc(
   return { status: response.statusCode, data };
 }
 
+async function metadata(path: string) {
+  const response = await handler({
+    rawPath: path,
+    requestContext: { http: { method: 'GET' } },
+    headers: {},
+  });
+
+  let data: any;
+  try {
+    data = JSON.parse(response.body);
+  } catch {
+    data = undefined;
+  }
+
+  return { status: response.statusCode, data };
+}
+
 async function main() {
+  const metadataPaths = [
+    '/.well-known/oauth-protected-resource',
+    '/.well-known/oauth-protected-resource/mcp',
+    '/mcp/.well-known/oauth-protected-resource',
+  ];
+
+  const metadataResponses = [];
+  for (const path of metadataPaths) {
+    metadataResponses.push(await metadata(path));
+  }
+
+  for (const response of metadataResponses) {
+    assert.equal(response.status, 200, 'Protected-resource metadata route failed');
+    assert.deepEqual(
+      response.data,
+      metadataResponses[0].data,
+      'Protected-resource metadata routes must remain identical'
+    );
+  }
+  assert.equal(
+    typeof metadataResponses[0].data?.resource,
+    'string',
+    'Protected-resource metadata must advertise a resource'
+  );
+  assert.ok(
+    Array.isArray(metadataResponses[0].data?.authorization_servers),
+    'Protected-resource metadata must advertise authorization servers'
+  );
+  console.log('PASS: all protected-resource metadata routes are consistent');
+
   const discovery = await rpc('server/discover', {});
 
   assert.equal(discovery.status, 200, 'Modern discovery failed');

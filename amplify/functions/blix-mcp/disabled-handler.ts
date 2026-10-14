@@ -19,7 +19,11 @@ export const handler = async (event: LambdaEvent) => {
 
   if (
     method === 'GET' &&
-    path === '/.well-known/oauth-protected-resource'
+    (
+      path === '/.well-known/oauth-protected-resource' ||
+      path === '/.well-known/oauth-protected-resource/mcp' ||
+      path === '/mcp/.well-known/oauth-protected-resource'
+    )
   ) {
     return {
       statusCode: 200,
@@ -34,7 +38,7 @@ export const handler = async (event: LambdaEvent) => {
     };
   }
 
-  // MCP remains completely disabled.
+  // Any route not explicitly allowed above remains disabled.
   return {
     statusCode: 503,
     headers: {
