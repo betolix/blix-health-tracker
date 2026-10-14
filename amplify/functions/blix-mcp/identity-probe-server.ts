@@ -2,6 +2,7 @@ import { Server } from "@modelcontextprotocol/server";
 import { MCP_RESOURCE, PROBE_SCOPE } from './auth0-probe';
 import { syntheticProbeOwnerFromVerifiedAuth0Subject } from './cognito-owner';
 import { countMatchingSyntheticProbeRows } from './ownership-probe';
+import { listSyntheticFoodEntries } from './synthetic-food-entry-probe';
 
 const securitySchemes = [
   { type: 'oauth2', scopes: [PROBE_SCOPE] },
@@ -18,6 +19,7 @@ const challenge =
 export function createIdentityProbeServer(
   fingerprint?: string,
   verifiedAuth0Subject?: string,
+  readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
 ) {
   const server = new Server(
     {
@@ -60,11 +62,20 @@ export function createIdentityProbeServer(
         _meta: { securitySchemes },
         annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       },
+      {
+        name: 'food_entries_probe',
+        title: 'Read isolated synthetic food entries (test only)',
+        description: 'Query only fake synthetic food entries scoped to the authenticated identity. No health data.',
+        inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false },
+        securitySchemes,
+        _meta: { securitySchemes },
+        annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      },
     ],
   }));
 
   server.setRequestHandler('tools/call', async (request) => {
-    if (request.params.name !== 'identity_probe' && request.params.name !== 'ownership_probe') {
+    if (request.params.name !== 'identity_probe' && request.params.name !== 'ownership_probe' && request.params.name !== 'food_entries_probe') {
       throw new Error('Unknown tool');
     }
 
@@ -78,6 +89,29 @@ export function createIdentityProbeServer(
           'mcp/www_authenticate': [challenge],
         },
       };
+    }
+
+    if (request.params.name === 'food_entries_probe') {
+      const args = request.params.arguments;
+      // Never accept owner, identity, table, or arbitrary user parameters.
+      if (args && (typeof args !== 'object' || Array.isArray(args) || Object.keys(args).length !== 0)) {
+        return { isError: true, content: [{ type: 'text' as const, text: 'Invalid arguments' }] };
+      }
+      if (!verifiedAuth0Subject) {
+        return { isError: true, content: [{ type: 'text' as const, text: 'Authentication required' }],
+          _meta: { 'mcp/www_authenticate': [challenge] } };
+      }
+      try {
+        const tableName = process.env.SYNTHETIC_FOOD_TABLE_NAME;
+        const indexName = process.env.SYNTHETIC_FOOD_INDEX_NAME;
+        if (!tableName || !indexName) throw new Error('Probe not configured');
+        const entries = await readSyntheticFood(verifiedAuth0Subject, tableName, indexName);
+        return { content: [{ type: 'text' as const,
+          text: JSON.stringify({ synthetic: true, entries }) }] };
+      } catch {
+        // Fail closed. Never echo identity, query, records, or AWS error details.
+        return { isError: true, content: [{ type: 'text' as const, text: 'Synthetic food probe unavailable' }] };
+      }
     }
 
     if (request.params.name === 'ownership_probe') {

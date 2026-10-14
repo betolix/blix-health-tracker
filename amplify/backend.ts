@@ -1,5 +1,6 @@
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { AttributeType, BillingMode, ProjectionType, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { blixMcp } from './functions/blix-mcp/resource';
 import { RemovalPolicy } from 'aws-cdk-lib';
 import { defineBackend } from '@aws-amplify/backend';
@@ -31,6 +32,36 @@ backend.blixMcp.resources.lambda.addToRolePolicy(new PolicyStatement({
 backend.blixMcp.resources.lambda.addEnvironment(
   'OWNERSHIP_PROBE_TABLE_NAME',
   ownershipProbeTable.tableName,
+);
+
+// ISOLATED SYNTHETIC DATASET. Not an Amplify Data model and not health data.
+// Query is the only permission the MCP Lambda gets on this table/index.
+const syntheticFoodTable = new Table(
+  backend.createStack('BlixSyntheticFoodProbe'),
+  'SyntheticFoodEntry',
+  {
+    partitionKey: { name: 'id', type: AttributeType.STRING },
+    billingMode: BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.RETAIN,
+  },
+);
+syntheticFoodTable.addGlobalSecondaryIndex({
+  indexName: 'byIdentityKey',
+  partitionKey: { name: 'identityKey', type: AttributeType.STRING },
+  projectionType: ProjectionType.INCLUDE,
+  nonKeyAttributes: ['date', 'name', 'calories'],
+});
+backend.blixMcp.resources.lambda.addToRolePolicy(new PolicyStatement({
+  actions: ['dynamodb:Query'],
+  resources: [
+    `${syntheticFoodTable.tableArn}/index/byIdentityKey`,
+  ],
+}));
+backend.blixMcp.resources.lambda.addEnvironment(
+  'SYNTHETIC_FOOD_TABLE_NAME', syntheticFoodTable.tableName,
+);
+backend.blixMcp.resources.lambda.addEnvironment(
+  'SYNTHETIC_FOOD_INDEX_NAME', 'byIdentityKey',
 );
 
 // Protect the production Cognito user pool from accidental deletion.

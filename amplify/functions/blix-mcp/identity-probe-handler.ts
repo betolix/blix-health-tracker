@@ -19,6 +19,7 @@ import {
 } from './auth0-probe';
 import { handler as disabledHandler } from './disabled-handler';
 import { createIdentityProbeServer } from './identity-probe-server';
+import { listSyntheticFoodEntries } from './synthetic-food-entry-probe';
 
 // Deployed by resource.ts. This handler exposes only the synthetic identity probe.
 type HttpEvent = {
@@ -129,7 +130,8 @@ function anonymousMcpOperation(body: string | undefined):
       if (
         params && typeof params === 'object' && !Array.isArray(params) &&
         ((params as { name?: unknown }).name === 'identity_probe' ||
-         (params as { name?: unknown }).name === 'ownership_probe')
+         (params as { name?: unknown }).name === 'ownership_probe' ||
+         (params as { name?: unknown }).name === 'food_entries_probe')
       ) {
         return 'probe-challenge';
       }
@@ -145,7 +147,8 @@ type ProbeVerifier = (
 ) => Promise<{ fingerprint: string; verifiedSubject: string }>;
 
 export function createIdentityProbeHandler(
-  verifyToken: ProbeVerifier = verifyIdentityProbeToken
+  verifyToken: ProbeVerifier = verifyIdentityProbeToken,
+  readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
 ) {
   return async (event: HttpEvent) => {
     const method = event.requestContext?.http?.method;
@@ -241,7 +244,7 @@ export function createIdentityProbeHandler(
     // MCP v2 serves both the 2026 discovery protocol and legacy clients.
     // A fresh server is constructed for this request only.
     const mcp = createMcpHandler(
-      () => createIdentityProbeServer(fingerprint, verifiedSubject),
+      () => createIdentityProbeServer(fingerprint, verifiedSubject, readSyntheticFood),
       { responseMode: 'json' }
     );
 
