@@ -43,7 +43,14 @@ const fakeVerifier = async (token: string) => {
   throw new Error('Invalid synthetic token');
 };
 
-const handler = createIdentityProbeHandler(fakeVerifier, fakeReader);
+const seedCalls: string[] = [];
+const fakeSeeder = async (verifiedSubject: unknown) => {
+  const key = syntheticFoodIdentityKeyFromVerifiedAuth0Subject(verifiedSubject);
+  seedCalls.push(key);
+  return 3;
+};
+
+const handler = createIdentityProbeHandler(fakeVerifier, fakeReader, fakeSeeder);
 
 async function rpc(method: string, params: Record<string, unknown>, token?: string) {
   const headers: Record<string, string> = {
@@ -82,18 +89,63 @@ async function rpc(method: string, params: Record<string, unknown>, token?: stri
   return { status: response.statusCode, data };
 }
 
-test('tools/list exposes exactly the three synthetic-only probes', async () => {
+test('tools/list exposes exactly the four synthetic-only probes', async () => {
   const res = await rpc('tools/list', {});
   assert.equal(res.status, 200);
   assert.deepEqual(res.data?.result?.tools?.map((x: any) => x.name), [
     'identity_probe',
     'ownership_probe',
     'food_entries_probe',
+    'seed_synthetic_food_probe',
   ]);
   const food = res.data?.result?.tools?.find((x: any) => x.name === 'food_entries_probe');
   assert.deepEqual(food?.securitySchemes, [{ type: 'oauth2', scopes: ['probe:identity'] }]);
   assert.deepEqual(food?.inputSchema?.properties, {});
   assert.equal(food?.inputSchema?.additionalProperties, false);
+
+  const seed = res.data?.result?.tools?.find((x: any) => x.name === 'seed_synthetic_food_probe');
+  assert.deepEqual(seed?.securitySchemes, [{ type: 'oauth2', scopes: ['probe:identity'] }]);
+  assert.deepEqual(seed?.inputSchema?.properties, {});
+  assert.equal(seed?.inputSchema?.additionalProperties, false);
+  assert.equal(seed?.annotations?.readOnlyHint, false);
+  assert.equal(seed?.annotations?.idempotentHint, false);
+});
+
+test('anonymous seed probe is challenged and never writes', async () => {
+  const before = seedCalls.length;
+  const res = await rpc('tools/call', { name: 'seed_synthetic_food_probe', arguments: {} });
+  assert.equal(res.status, 200);
+  assert.equal(res.data?.result?.isError, true);
+  assert.ok(res.data?.result?._meta?.['mcp/www_authenticate']);
+  assert.equal(seedCalls.length, before);
+});
+
+test('authenticated seed probe derives identity server-side and returns only a count', async () => {
+  const before = seedCalls.length;
+  const res = await rpc('tools/call',
+    { name: 'seed_synthetic_food_probe', arguments: {} }, 'synthetic-a');
+
+  assert.equal(res.status, 200);
+  assert.equal(seedCalls.length, before + 1);
+  assert.equal(
+    seedCalls.at(-1),
+    syntheticFoodIdentityKeyFromVerifiedAuth0Subject(subject(A)),
+  );
+
+  const result = JSON.parse(res.data.result.content[0].text);
+  assert.deepEqual(result, { synthetic: true, seeded: 3 });
+});
+
+test('seed probe rejects caller-supplied owner or row data before writing', async () => {
+  const before = seedCalls.length;
+  const res = await rpc('tools/call', {
+    name: 'seed_synthetic_food_probe',
+    arguments: { owner: 'forged', name: 'caller-controlled' },
+  }, 'synthetic-a');
+
+  assert.ok(res.status === 200 || res.status === 400);
+  assert.equal(seedCalls.length, before);
+  assert.notEqual(res.data?.result?.isError, false);
 });
 
 test('anonymous food probe is challenged and never reads', async () => {

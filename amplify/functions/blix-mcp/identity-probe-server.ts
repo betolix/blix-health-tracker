@@ -3,6 +3,7 @@ import { MCP_RESOURCE, PROBE_SCOPE } from './auth0-probe';
 import { syntheticProbeOwnerFromVerifiedAuth0Subject } from './cognito-owner';
 import { countMatchingSyntheticProbeRows } from './ownership-probe';
 import { listSyntheticFoodEntries } from './synthetic-food-entry-probe';
+import { seedSyntheticFoodEntries } from './synthetic-food-seed';
 
 const securitySchemes = [
   { type: 'oauth2', scopes: [PROBE_SCOPE] },
@@ -20,6 +21,7 @@ export function createIdentityProbeServer(
   fingerprint?: string,
   verifiedAuth0Subject?: string,
   readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
+  seedSyntheticFood: typeof seedSyntheticFoodEntries = seedSyntheticFoodEntries,
 ) {
   const server = new Server(
     {
@@ -71,11 +73,25 @@ export function createIdentityProbeServer(
         _meta: { securitySchemes },
         annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       },
+      {
+        name: 'seed_synthetic_food_probe',
+        title: 'Seed isolated synthetic food entries (temporary test only)',
+        description: 'Insert only predefined fake rows for the authenticated identity into the isolated synthetic table. No health data.',
+        inputSchema: { type: 'object' as const, properties: {}, additionalProperties: false },
+        securitySchemes,
+        _meta: { securitySchemes },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      },
     ],
   }));
 
   server.setRequestHandler('tools/call', async (request) => {
-    if (request.params.name !== 'identity_probe' && request.params.name !== 'ownership_probe' && request.params.name !== 'food_entries_probe') {
+    if (
+      request.params.name !== 'identity_probe' &&
+      request.params.name !== 'ownership_probe' &&
+      request.params.name !== 'food_entries_probe' &&
+      request.params.name !== 'seed_synthetic_food_probe'
+    ) {
       throw new Error('Unknown tool');
     }
 
@@ -89,6 +105,28 @@ export function createIdentityProbeServer(
           'mcp/www_authenticate': [challenge],
         },
       };
+    }
+
+    if (request.params.name === 'seed_synthetic_food_probe') {
+      const args = request.params.arguments;
+      // Never accept owner, identity, table, row contents, or arbitrary parameters.
+      if (args && (typeof args !== 'object' || Array.isArray(args) || Object.keys(args).length !== 0)) {
+        return { isError: true, content: [{ type: 'text' as const, text: 'Invalid arguments' }] };
+      }
+      if (!verifiedAuth0Subject) {
+        return { isError: true, content: [{ type: 'text' as const, text: 'Authentication required' }],
+          _meta: { 'mcp/www_authenticate': [challenge] } };
+      }
+      try {
+        const tableName = process.env.SYNTHETIC_FOOD_TABLE_NAME;
+        if (!tableName) throw new Error('Probe not configured');
+        const seeded = await seedSyntheticFood(verifiedAuth0Subject, tableName);
+        return { content: [{ type: 'text' as const,
+          text: JSON.stringify({ synthetic: true, seeded }) }] };
+      } catch {
+        // Fail closed. Never echo identity, generated IDs, rows, or AWS error details.
+        return { isError: true, content: [{ type: 'text' as const, text: 'Synthetic food seed unavailable' }] };
+      }
     }
 
     if (request.params.name === 'food_entries_probe') {
