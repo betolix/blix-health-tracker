@@ -35,8 +35,7 @@ backend.blixMcp.resources.lambda.addEnvironment(
 );
 
 // ISOLATED SYNTHETIC DATASET. Not an Amplify Data model and not health data.
-// Query remains restricted to the GSI. Temporary E2E seeding gets PutItem only
-// on this isolated synthetic table; no health-model table permissions are added.
+// Query is the only permission the MCP Lambda gets on this table/index.
 const syntheticFoodTable = new Table(
   backend.createStack('BlixSyntheticFoodProbe'),
   'SyntheticFoodEntry',
@@ -57,10 +56,6 @@ backend.blixMcp.resources.lambda.addToRolePolicy(new PolicyStatement({
   resources: [
     `${syntheticFoodTable.tableArn}/index/byIdentityKey`,
   ],
-}));
-backend.blixMcp.resources.lambda.addToRolePolicy(new PolicyStatement({
-  actions: ['dynamodb:PutItem'],
-  resources: [syntheticFoodTable.tableArn],
 }));
 backend.blixMcp.resources.lambda.addEnvironment(
   'SYNTHETIC_FOOD_TABLE_NAME', syntheticFoodTable.tableName,
