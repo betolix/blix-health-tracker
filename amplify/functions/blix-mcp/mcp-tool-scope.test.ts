@@ -11,7 +11,10 @@ import {
   FOOD_READ_SCOPE,
   FOOD_UPDATE_SCOPE,
   PROBE_SCOPE,
+  VITAL_CREATE_SCOPE,
+  VITAL_DELETE_SCOPE,
   VITAL_READ_SCOPE,
+  VITAL_UPDATE_SCOPE,
 } from './oauth-scope.ts';
 
 test('each synthetic probe requires only probe:identity', () => {
@@ -47,6 +50,21 @@ test('FoodEntry write tools require distinct exact scopes', () => {
   assert.equal(
     requiredOAuthScopeForTool('delete_food_entry'),
     FOOD_DELETE_SCOPE,
+  );
+});
+
+test('Vital write tools require distinct exact scopes', () => {
+  assert.equal(
+    requiredOAuthScopeForTool('create_vital'),
+    VITAL_CREATE_SCOPE,
+  );
+  assert.equal(
+    requiredOAuthScopeForTool('update_vital'),
+    VITAL_UPDATE_SCOPE,
+  );
+  assert.equal(
+    requiredOAuthScopeForTool('delete_vital'),
+    VITAL_DELETE_SCOPE,
   );
 });
 

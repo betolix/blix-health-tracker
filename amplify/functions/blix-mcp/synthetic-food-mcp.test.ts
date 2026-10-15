@@ -97,6 +97,9 @@ test('tools/list preserves synthetic probes and exposes only the gated real food
     'update_food_entry',
     'delete_food_entry',
     'read_vitals',
+    'create_vital',
+    'update_vital',
+    'delete_vital',
     'read_daily_targets',
   ]);
 

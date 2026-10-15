@@ -21,7 +21,10 @@ import {
   verifyFoodReadToken,
   verifyFoodUpdateToken,
   verifyIdentityProbeToken,
+  verifyVitalCreateToken,
+  verifyVitalDeleteToken,
   verifyVitalReadToken,
+  verifyVitalUpdateToken,
 } from './auth0-probe';
 import {
   DAILY_TARGET_READ_SCOPE,
@@ -30,7 +33,10 @@ import {
   FOOD_READ_SCOPE,
   FOOD_UPDATE_SCOPE,
   InsufficientOAuthScopeError,
+  VITAL_CREATE_SCOPE,
+  VITAL_DELETE_SCOPE,
   VITAL_READ_SCOPE,
+  VITAL_UPDATE_SCOPE,
 } from './oauth-scope';
 import {
   classifyMcpRequestAuth,
@@ -49,6 +55,14 @@ import {
   readVitals,
   type VitalReadInput,
 } from './vital-reader';
+import {
+  createVital,
+  deleteVital,
+  updateVital,
+  type CreateVitalInput,
+  type DeleteVitalInput,
+  type UpdateVitalInput,
+} from './vital-writer';
 import {
   readDailyTargets,
   type DailyTargetReadInput,
@@ -230,6 +244,18 @@ type RealVitalReader = (
   input: VitalReadInput,
 ) => ReturnType<typeof readVitals>;
 
+type RealVitalCreator = (
+  input: CreateVitalInput,
+) => ReturnType<typeof createVital>;
+
+type RealVitalUpdater = (
+  input: UpdateVitalInput,
+) => ReturnType<typeof updateVital>;
+
+type RealVitalDeleter = (
+  input: DeleteVitalInput,
+) => ReturnType<typeof deleteVital>;
+
 type RealDailyTargetReader = (
   input: DailyTargetReadInput,
 ) => ReturnType<typeof readDailyTargets>;
@@ -264,6 +290,22 @@ const productionVitalReader: RealVitalReader = (input) =>
     send: (command) => dynamoDb.send(command),
   });
 
+const productionVitalWriterDependencies = {
+  tableName: process.env.VITAL_TABLE_NAME ?? '',
+  put: (command: any) => dynamoDb.send(command),
+  update: (command: any) => dynamoDb.send(command),
+  delete: (command: any) => dynamoDb.send(command),
+};
+
+const productionVitalCreator: RealVitalCreator = (input) =>
+  createVital(input, productionVitalWriterDependencies);
+
+const productionVitalUpdater: RealVitalUpdater = (input) =>
+  updateVital(input, productionVitalWriterDependencies);
+
+const productionVitalDeleter: RealVitalDeleter = (input) =>
+  deleteVital(input, productionVitalWriterDependencies);
+
 const productionDailyTargetReader: RealDailyTargetReader = (input) =>
   readDailyTargets(input, {
     tableName: process.env.DAILY_TARGET_TABLE_NAME ?? '',
@@ -285,6 +327,12 @@ export function createIdentityProbeHandler(
   updateRealFood?: RealFoodUpdater,
   verifyFoodDelete: FoodWriteVerifier = verifyFoodDeleteToken,
   deleteRealFood?: RealFoodDeleter,
+  verifyVitalCreate: FoodWriteVerifier = verifyVitalCreateToken,
+  createRealVital?: RealVitalCreator,
+  verifyVitalUpdate: FoodWriteVerifier = verifyVitalUpdateToken,
+  updateRealVital?: RealVitalUpdater,
+  verifyVitalDelete: FoodWriteVerifier = verifyVitalDeleteToken,
+  deleteRealVital?: RealVitalDeleter,
 ) {
   return async (event: HttpEvent) => {
     const method = event.requestContext?.http?.method;
@@ -408,6 +456,21 @@ export function createIdentityProbeHandler(
           ({ verifiedSubject } = await verifyVitalToken(token));
         } else if (
           requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === VITAL_CREATE_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyVitalCreate(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === VITAL_UPDATE_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyVitalUpdate(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === VITAL_DELETE_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyVitalDelete(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
           requestAuth.requiredScope === DAILY_TARGET_READ_SCOPE
         ) {
           ({ verifiedSubject } = await verifyDailyTargetToken(token));
@@ -452,12 +515,36 @@ export function createIdentityProbeHandler(
 
                     try {
                       ({ verifiedSubject } = await verifyVitalToken(token));
-              } catch (vitalError) {
-                if (!(vitalError instanceof InsufficientOAuthScopeError)) {
-                  throw vitalError;
-                }
+                    } catch (vitalError) {
+                      if (!(vitalError instanceof InsufficientOAuthScopeError)) {
+                        throw vitalError;
+                      }
 
-                      ({ verifiedSubject } = await verifyDailyTargetToken(token));
+                      try {
+                        ({ verifiedSubject } = await verifyVitalCreate(token));
+                      } catch (vitalCreateError) {
+                        if (!(vitalCreateError instanceof InsufficientOAuthScopeError)) {
+                          throw vitalCreateError;
+                        }
+
+                        try {
+                          ({ verifiedSubject } = await verifyVitalUpdate(token));
+                        } catch (vitalUpdateError) {
+                          if (!(vitalUpdateError instanceof InsufficientOAuthScopeError)) {
+                            throw vitalUpdateError;
+                          }
+
+                          try {
+                            ({ verifiedSubject } = await verifyVitalDelete(token));
+                          } catch (vitalDeleteError) {
+                            if (!(vitalDeleteError instanceof InsufficientOAuthScopeError)) {
+                              throw vitalDeleteError;
+                            }
+
+                            ({ verifiedSubject } = await verifyDailyTargetToken(token));
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -506,6 +593,9 @@ export function createIdentityProbeHandler(
         createRealFood,
         updateRealFood,
         deleteRealFood,
+        createRealVital,
+        updateRealVital,
+        deleteRealVital,
       ),
       { responseMode: 'json' }
     );
@@ -557,4 +647,10 @@ export const handler = createIdentityProbeHandler(
   productionFoodUpdater,
   verifyFoodDeleteToken,
   productionFoodDeleter,
+  verifyVitalCreateToken,
+  productionVitalCreator,
+  verifyVitalUpdateToken,
+  productionVitalUpdater,
+  verifyVitalDeleteToken,
+  productionVitalDeleter,
 );
