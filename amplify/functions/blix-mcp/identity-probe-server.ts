@@ -6,7 +6,10 @@ import {
   FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
   FOOD_UPDATE_SCOPE,
+  VITAL_CREATE_SCOPE,
+  VITAL_DELETE_SCOPE,
   VITAL_READ_SCOPE,
+  VITAL_UPDATE_SCOPE,
 } from './oauth-scope';
 import type {
   FoodEntryReadInput,
@@ -16,6 +19,12 @@ import type {
   VitalReadInput,
   VitalReadResult,
 } from './vital-reader';
+import type {
+  CreateVitalInput,
+  DeleteVitalInput,
+  UpdateVitalInput,
+  VitalWriteResult,
+} from './vital-writer';
 import type {
   DailyTargetReadInput,
   DailyTargetReadResult,
@@ -54,6 +63,18 @@ const vitalReadSecuritySchemes = [
   { type: 'oauth2', scopes: [VITAL_READ_SCOPE] },
 ];
 
+const vitalCreateSecuritySchemes = [
+  { type: 'oauth2', scopes: [VITAL_CREATE_SCOPE] },
+];
+
+const vitalUpdateSecuritySchemes = [
+  { type: 'oauth2', scopes: [VITAL_UPDATE_SCOPE] },
+];
+
+const vitalDeleteSecuritySchemes = [
+  { type: 'oauth2', scopes: [VITAL_DELETE_SCOPE] },
+];
+
 const dailyTargetReadSecuritySchemes = [
   { type: 'oauth2', scopes: [DAILY_TARGET_READ_SCOPE] },
 ];
@@ -78,6 +99,18 @@ type RealVitalReader = (
   input: VitalReadInput,
 ) => Promise<VitalReadResult[]>;
 
+type RealVitalCreator = (
+  input: CreateVitalInput,
+) => Promise<VitalWriteResult>;
+
+type RealVitalUpdater = (
+  input: UpdateVitalInput,
+) => Promise<VitalWriteResult>;
+
+type RealVitalDeleter = (
+  input: DeleteVitalInput,
+) => Promise<VitalWriteResult>;
+
 type RealDailyTargetReader = (
   input: DailyTargetReadInput,
 ) => Promise<DailyTargetReadResult[]>;
@@ -100,6 +133,9 @@ export function createIdentityProbeServer(
   createRealFood?: RealFoodCreator,
   updateRealFood?: RealFoodUpdater,
   deleteRealFood?: RealFoodDeleter,
+  createRealVital?: RealVitalCreator,
+  updateRealVital?: RealVitalUpdater,
+  deleteRealVital?: RealVitalDeleter,
 ) {
   const server = new Server(
     {
@@ -294,6 +330,81 @@ export function createIdentityProbeServer(
         },
       },
       {
+        name: 'create_vital',
+        title: 'Create vital',
+        description:
+          'Create a vital record for the authenticated user.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            recordedAt: { type: 'string' as const },
+            weightKg: { type: 'number' as const },
+            systolic: { type: 'integer' as const },
+            diastolic: { type: 'integer' as const },
+            notes: { type: 'string' as const },
+          },
+          required: ['recordedAt'],
+          additionalProperties: false,
+        },
+        securitySchemes: vitalCreateSecuritySchemes,
+        _meta: { securitySchemes: vitalCreateSecuritySchemes },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      {
+        name: 'update_vital',
+        title: 'Update vital',
+        description:
+          'Update an existing vital record owned by the authenticated user.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            id: { type: 'string' as const },
+            recordedAt: { type: 'string' as const },
+            weightKg: { type: ['number', 'null'] as const },
+            systolic: { type: ['integer', 'null'] as const },
+            diastolic: { type: ['integer', 'null'] as const },
+            notes: { type: ['string', 'null'] as const },
+          },
+          required: ['id'],
+          additionalProperties: false,
+        },
+        securitySchemes: vitalUpdateSecuritySchemes,
+        _meta: { securitySchemes: vitalUpdateSecuritySchemes },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      {
+        name: 'delete_vital',
+        title: 'Delete vital',
+        description:
+          'Delete a vital record owned by the authenticated user.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            id: { type: 'string' as const },
+          },
+          required: ['id'],
+          additionalProperties: false,
+        },
+        securitySchemes: vitalDeleteSecuritySchemes,
+        _meta: { securitySchemes: vitalDeleteSecuritySchemes },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      {
         name: 'read_daily_targets',
         title: 'Read daily targets',
         description:
@@ -329,6 +440,9 @@ export function createIdentityProbeServer(
       request.params.name !== 'update_food_entry' &&
       request.params.name !== 'delete_food_entry' &&
       request.params.name !== 'read_vitals' &&
+      request.params.name !== 'create_vital' &&
+      request.params.name !== 'update_vital' &&
+      request.params.name !== 'delete_vital' &&
       request.params.name !== 'read_daily_targets'
     ) {
       throw new Error('Unknown tool');
@@ -619,6 +733,154 @@ export function createIdentityProbeServer(
           content: [
             { type: 'text' as const, text: 'Vital read unavailable' },
           ],
+        };
+      }
+    }
+
+    if (request.params.name === 'create_vital') {
+      const args = request.params.arguments;
+
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        Array.isArray(args) ||
+        !verifiedAuth0Subject ||
+        !createRealVital
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Vital create unavailable' }],
+        };
+      }
+
+      const allowed = new Set([
+        'recordedAt',
+        'weightKg',
+        'systolic',
+        'diastolic',
+        'notes',
+      ]);
+
+      if (
+        Object.keys(args).some((key) => !allowed.has(key)) ||
+        typeof (args as any).recordedAt !== 'string'
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Invalid arguments' }],
+        };
+      }
+
+      try {
+        const result = await createRealVital({
+          verifiedSubject: verifiedAuth0Subject,
+          ...(args as Omit<CreateVitalInput, 'verifiedSubject'>),
+        });
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          }],
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Vital create unavailable' }],
+        };
+      }
+    }
+
+    if (request.params.name === 'update_vital') {
+      const args = request.params.arguments;
+
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        Array.isArray(args) ||
+        !verifiedAuth0Subject ||
+        !updateRealVital
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Vital update unavailable' }],
+        };
+      }
+
+      const allowed = new Set([
+        'id',
+        'recordedAt',
+        'weightKg',
+        'systolic',
+        'diastolic',
+        'notes',
+      ]);
+
+      if (
+        Object.keys(args).some((key) => !allowed.has(key)) ||
+        typeof (args as any).id !== 'string' ||
+        Object.keys(args).length < 2
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Invalid arguments' }],
+        };
+      }
+
+      try {
+        const result = await updateRealVital({
+          verifiedSubject: verifiedAuth0Subject,
+          ...(args as Omit<UpdateVitalInput, 'verifiedSubject'>),
+        });
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          }],
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Vital update unavailable' }],
+        };
+      }
+    }
+
+    if (request.params.name === 'delete_vital') {
+      const args = request.params.arguments;
+
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        Array.isArray(args) ||
+        Object.keys(args).length !== 1 ||
+        typeof (args as any).id !== 'string' ||
+        !verifiedAuth0Subject ||
+        !deleteRealVital
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Invalid arguments' }],
+        };
+      }
+
+      try {
+        const result = await deleteRealVital({
+          verifiedSubject: verifiedAuth0Subject,
+          id: (args as { id: string }).id,
+        });
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          }],
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Vital delete unavailable' }],
         };
       }
     }

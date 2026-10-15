@@ -9,7 +9,10 @@ import {
   FOOD_UPDATE_SCOPE,
   InsufficientOAuthScopeError,
   PROBE_SCOPE,
+  VITAL_CREATE_SCOPE,
+  VITAL_DELETE_SCOPE,
   VITAL_READ_SCOPE,
+  VITAL_UPDATE_SCOPE,
   requireOAuthScope,
 } from './oauth-scope';
 
@@ -182,6 +185,55 @@ export async function verifyFoodDeleteToken(
   const payload = await tokenVerifier.verify(token);
 
   requireOAuthScope(payload.scope, FOOD_DELETE_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+
+export async function verifyVitalCreateToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, VITAL_CREATE_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+export async function verifyVitalUpdateToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, VITAL_UPDATE_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+export async function verifyVitalDeleteToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, VITAL_DELETE_SCOPE);
 
   const verifiedSubject = payload.sub;
   if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {

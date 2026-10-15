@@ -5,7 +5,10 @@ import {
   FOOD_READ_SCOPE,
   FOOD_UPDATE_SCOPE,
   PROBE_SCOPE,
+  VITAL_CREATE_SCOPE,
+  VITAL_DELETE_SCOPE,
   VITAL_READ_SCOPE,
+  VITAL_UPDATE_SCOPE,
 } from './oauth-scope';
 
 const RESOURCE =
@@ -51,6 +54,9 @@ export const handler = async (event: LambdaEvent) => {
           FOOD_UPDATE_SCOPE,
           FOOD_DELETE_SCOPE,
           VITAL_READ_SCOPE,
+          VITAL_CREATE_SCOPE,
+          VITAL_UPDATE_SCOPE,
+          VITAL_DELETE_SCOPE,
           DAILY_TARGET_READ_SCOPE,
         ],
       }),

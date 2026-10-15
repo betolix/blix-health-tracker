@@ -118,6 +118,9 @@ async function main() {
       'food:update',
       'food:delete',
       'vitals:read',
+    'vitals:create',
+    'vitals:update',
+    'vitals:delete',
       'targets:read',
     ],
     'Protected-resource metadata must advertise exactly the supported MCP scopes'
@@ -147,6 +150,9 @@ async function main() {
       'update_food_entry',
       'delete_food_entry',
       'read_vitals',
+      'create_vital',
+      'update_vital',
+      'delete_vital',
       'read_daily_targets',
     ],
     'Unexpected tools exposed'
