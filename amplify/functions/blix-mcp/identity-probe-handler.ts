@@ -30,7 +30,7 @@ import { handler as disabledHandler } from './disabled-handler';
 import { createIdentityProbeServer } from './identity-probe-server';
 import { listSyntheticFoodEntries } from './synthetic-food-entry-probe';
 
-// Deployed by resource.ts. This handler exposes only the synthetic identity probe.
+// Deployed by resource.ts. The real FoodEntry tool remains fail-closed unless a reader is explicitly injected.
 type HttpEvent = {
   rawPath?: string;
   body?: string | null;

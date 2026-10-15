@@ -26,6 +26,28 @@ async function postMcp(body: unknown) {
   });
 }
 
+function parseMcpBody(body: string) {
+  try {
+    return JSON.parse(body);
+  } catch {
+    const dataLines = body
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice('data:'.length).trim())
+      .filter(Boolean);
+
+    for (const data of dataLines) {
+      try {
+        return JSON.parse(data);
+      } catch {
+        // Continue until a JSON MCP event is found.
+      }
+    }
+
+    throw new Error('Expected JSON or SSE-wrapped JSON MCP response');
+  }
+}
+
 async function main() {
   const initialize = await postMcp({
     jsonrpc: '2.0',
@@ -43,7 +65,7 @@ async function main() {
 
   assert(initialize.statusCode === 200, 'Initialize must return HTTP 200');
 
-  const initializeBody = JSON.parse(initialize.body);
+  const initializeBody = parseMcpBody(initialize.body);
   assert(
     initializeBody.result?.serverInfo?.name === 'blix-identity-probe',
     'Unexpected MCP server identity'
@@ -60,18 +82,27 @@ async function main() {
 
   assert(list.statusCode === 200, 'tools/list must return HTTP 200');
 
-  const listBody = JSON.parse(list.body);
+  const listBody = parseMcpBody(list.body);
   const tools = listBody.result?.tools;
 
   assert(
     Array.isArray(tools) &&
-      tools.length === 1 &&
-      tools[0].name === 'identity_probe',
-    'Expected only identity_probe'
+      JSON.stringify(tools.map((tool: any) => tool.name)) ===
+        JSON.stringify([
+          'identity_probe',
+          'ownership_probe',
+          'food_entries_probe',
+          'read_food_entries',
+        ]),
+    'Unexpected HTTP MCP tool contract'
+  );
+
+  const identityTool = tools.find(
+    (tool: any) => tool.name === 'identity_probe'
   );
 
   const schemes =
-    tools[0]._meta?.securitySchemes;
+    identityTool?._meta?.securitySchemes;
 
   assert(
     Array.isArray(schemes) &&
@@ -83,7 +114,23 @@ async function main() {
     'Expected probe-only OAuth metadata'
   );
 
-  console.log('PASS: authenticated HTTP tools/list exposes only identity_probe');
+  const realFood = tools.find(
+    (tool: any) => tool.name === 'read_food_entries'
+  );
+
+  const realFoodSchemes = realFood?._meta?.securitySchemes;
+
+  assert(
+    Array.isArray(realFoodSchemes) &&
+      realFoodSchemes.length === 1 &&
+      realFoodSchemes[0].type === 'oauth2' &&
+      Array.isArray(realFoodSchemes[0].scopes) &&
+      realFoodSchemes[0].scopes.length === 1 &&
+      realFoodSchemes[0].scopes[0] === 'food:read',
+    'Expected food-only OAuth metadata'
+  );
+
+  console.log('PASS: authenticated HTTP tools/list exposes current scoped tool contract');
 
   const call = await postMcp({
     jsonrpc: '2.0',
@@ -97,7 +144,7 @@ async function main() {
 
   assert(call.statusCode === 200, 'tools/call must return HTTP 200');
 
-  const callBody = JSON.parse(call.body);
+  const callBody = parseMcpBody(call.body);
   const content = callBody.result?.content;
 
   assert(

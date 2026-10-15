@@ -72,6 +72,7 @@ function resetCalls() {
 async function call(
   toolName: string,
   token?: string,
+  args: Record<string, unknown> = {},
 ) {
   const headers: Record<string, string> = {
     'content-type': 'application/json',
@@ -92,7 +93,7 @@ async function call(
       method: 'tools/call',
       params: {
         name: toolName,
-        arguments: {},
+        arguments: args,
       },
     }),
   });
@@ -114,6 +115,28 @@ async function discovery(token: string) {
       params: {},
     }),
   });
+}
+
+function parseMcpBody(body: string) {
+  try {
+    return JSON.parse(body);
+  } catch {
+    const dataLines = body
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice('data:'.length).trim())
+      .filter(Boolean);
+
+    for (const data of dataLines) {
+      try {
+        return JSON.parse(data);
+      } catch {
+        // Continue until a JSON MCP event is found.
+      }
+    }
+
+    throw new Error('Expected JSON or SSE-wrapped JSON MCP response');
+  }
 }
 
 async function main() {
@@ -181,16 +204,28 @@ async function main() {
   const authorizedFood = await call(
     'read_food_entries',
     'synthetic-food-token',
+    {
+      from: '2099-01-01',
+      to: '2099-01-02',
+    },
   );
 
   assert.equal(foodVerifierCalls, 1);
   assert.equal(probeVerifierCalls, 0);
   assert.equal(syntheticReaderCalls, 0);
 
-  // The real tool is deliberately NOT registered yet.
-  // Authentication may succeed, but no health reader may run.
+  // The tool contract is registered, but no real reader is injected yet.
+  // Authentication may succeed; real FoodEntry access must still fail closed.
   assert.equal(authorizedFood.statusCode, 200);
-  console.log('PASS: food:read routes correctly without enabling real reader');
+
+  const authorizedFoodBody = parseMcpBody(authorizedFood.body);
+  assert.equal(authorizedFoodBody.result?.isError, true);
+  assert.equal(
+    authorizedFoodBody.result?.content?.[0]?.text,
+    'FoodEntry read unavailable',
+  );
+
+  console.log('PASS: food:read routes correctly while real reader remains disabled');
 
   resetCalls();
 

@@ -6,16 +6,15 @@ import {
 import { SimpleJwksCache } from 'aws-jwt-verify/jwk';
 import {
   AUTH0_ISSUER,
+  CHATGPT_CIMD_CLIENT_ID,
   MCP_RESOURCE,
   PROBE_SCOPE,
   createIdentityProbeVerifier,
   verifyIdentityProbeToken,
 } from './auth0-probe';
 
-const TEST_CLIENT_ID = 'synthetic-chatgpt-cimd-client';
+const TEST_CLIENT_ID = CHATGPT_CIMD_CLIENT_ID;
 const JWKS_URI = `${AUTH0_ISSUER}.well-known/jwks.json`;
-
-process.env.BLIX_AUTH0_CIMD_CLIENT_ID = TEST_CLIENT_ID;
 
 const trusted = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const untrusted = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -171,14 +170,10 @@ async function main() {
     makeToken({ sub: undefined })
   );
 
-  delete process.env.BLIX_AUTH0_CIMD_CLIENT_ID;
-
   await expectRejected(
-    'missing pinned client configuration fails closed',
-    makeToken()
+    'missing OAuth client rejected',
+    makeToken({ azp: undefined })
   );
-
-  process.env.BLIX_AUTH0_CIMD_CLIENT_ID = TEST_CLIENT_ID;
 
   const a1 = await verifyIdentityProbeToken(
     makeToken({

@@ -109,6 +109,11 @@ async function main() {
     Array.isArray(metadataResponses[0].data?.authorization_servers),
     'Protected-resource metadata must advertise authorization servers'
   );
+  assert.deepEqual(
+    metadataResponses[0].data?.scopes_supported,
+    ['probe:identity', 'food:read'],
+    'Protected-resource metadata must advertise exactly the supported MCP scopes'
+  );
   console.log('PASS: all protected-resource metadata routes are consistent');
 
   const discovery = await rpc('server/discover', {});
@@ -125,10 +130,72 @@ async function main() {
   assert.equal(listing.status, 200, 'Modern tools/list failed');
   assert.deepEqual(
     listing.data?.result?.tools?.map((tool: any) => tool.name),
-    ['identity_probe', 'ownership_probe', 'food_entries_probe'],
+    [
+      'identity_probe',
+      'ownership_probe',
+      'food_entries_probe',
+      'read_food_entries',
+    ],
     'Unexpected tools exposed'
   );
-  console.log('PASS: only three synthetic probes exposed');
+
+  const listedTools = listing.data?.result?.tools ?? [];
+  const probeNames = [
+    'identity_probe',
+    'ownership_probe',
+    'food_entries_probe',
+  ];
+
+  for (const name of probeNames) {
+    const tool = listedTools.find((candidate: any) => candidate.name === name);
+
+    assert.deepEqual(
+      tool?.securitySchemes,
+      [{ type: 'oauth2', scopes: ['probe:identity'] }],
+      `${name} must require only probe:identity`
+    );
+
+    assert.deepEqual(
+      tool?._meta?.securitySchemes,
+      [{ type: 'oauth2', scopes: ['probe:identity'] }],
+      `${name} _meta must require only probe:identity`
+    );
+  }
+
+  const realFood = listedTools.find(
+    (tool: any) => tool.name === 'read_food_entries'
+  );
+
+  assert.deepEqual(
+    realFood?.securitySchemes,
+    [{ type: 'oauth2', scopes: ['food:read'] }],
+    'read_food_entries must require only food:read'
+  );
+
+  assert.deepEqual(
+    realFood?._meta?.securitySchemes,
+    [{ type: 'oauth2', scopes: ['food:read'] }],
+    'read_food_entries _meta must require only food:read'
+  );
+
+  assert.equal(
+    listedTools.some((tool: any) =>
+      [
+        'add_food',
+        'write_food_entries',
+        'update_food_entries',
+        'delete_food_entries',
+        'read_vitals',
+        'read_daily_targets',
+      ].includes(tool.name)
+    ),
+    false,
+    'No writes, Vital, or DailyTarget tools may be exposed'
+  );
+
+  console.log(
+    'PASS: three synthetic probes plus one scoped read-only FoodEntry tool exposed'
+  );
 
   const anonymous = await rpc('tools/call', {
     name: 'identity_probe',

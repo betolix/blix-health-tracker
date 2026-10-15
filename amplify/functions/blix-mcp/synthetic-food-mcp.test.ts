@@ -82,18 +82,34 @@ async function rpc(method: string, params: Record<string, unknown>, token?: stri
   return { status: response.statusCode, data };
 }
 
-test('tools/list exposes exactly the three synthetic-only probes', async () => {
+test('tools/list preserves synthetic probes and exposes only the gated real food read', async () => {
   const res = await rpc('tools/list', {});
   assert.equal(res.status, 200);
-  assert.deepEqual(res.data?.result?.tools?.map((x: any) => x.name), [
+
+  const tools = res.data?.result?.tools ?? [];
+
+  assert.deepEqual(tools.map((x: any) => x.name), [
     'identity_probe',
     'ownership_probe',
     'food_entries_probe',
+    'read_food_entries',
   ]);
-  const food = res.data?.result?.tools?.find((x: any) => x.name === 'food_entries_probe');
-  assert.deepEqual(food?.securitySchemes, [{ type: 'oauth2', scopes: ['probe:identity'] }]);
+
+  const food = tools.find((x: any) => x.name === 'food_entries_probe');
+  assert.deepEqual(
+    food?.securitySchemes,
+    [{ type: 'oauth2', scopes: ['probe:identity'] }],
+  );
   assert.deepEqual(food?.inputSchema?.properties, {});
   assert.equal(food?.inputSchema?.additionalProperties, false);
+
+  const realFood = tools.find((x: any) => x.name === 'read_food_entries');
+  assert.deepEqual(
+    realFood?.securitySchemes,
+    [{ type: 'oauth2', scopes: ['food:read'] }],
+  );
+  assert.equal(realFood?.annotations?.readOnlyHint, true);
+  assert.equal(realFood?.annotations?.destructiveHint, false);
 });
 
 test('anonymous food probe is challenged and never reads', async () => {

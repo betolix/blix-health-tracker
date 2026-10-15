@@ -28,6 +28,28 @@ async function post(body: unknown, headers: Record<string, string> = {}) {
   });
 }
 
+function parseMcpBody(body: string) {
+  try {
+    return JSON.parse(body);
+  } catch {
+    const dataLines = body
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice('data:'.length).trim())
+      .filter(Boolean);
+
+    for (const data of dataLines) {
+      try {
+        return JSON.parse(data);
+      } catch {
+        // Continue until a JSON MCP event is found.
+      }
+    }
+
+    throw new Error('Expected JSON or SSE-wrapped JSON MCP response');
+  }
+}
+
 const initialize = {
   jsonrpc: '2.0',
   id: 1,
@@ -48,21 +70,42 @@ async function run() {
   const anonymousInitialize = await post(initialize);
   assert.equal(anonymousInitialize.statusCode, 200);
   assert.equal(
-    JSON.parse(anonymousInitialize.body).result.serverInfo.name,
+    parseMcpBody(anonymousInitialize.body).result.serverInfo.name,
     'blix-identity-probe'
   );
 
   const anonymousList = await post(list);
   assert.equal(anonymousList.statusCode, 200);
-  const tools = JSON.parse(anonymousList.body).result.tools;
+  const tools = parseMcpBody(anonymousList.body).result.tools;
   assert.deepEqual(tools.map((tool: { name: string }) => tool.name), [
     'identity_probe',
+    'ownership_probe',
+    'food_entries_probe',
+    'read_food_entries',
   ]);
   assert.deepEqual(tools[0]._meta.securitySchemes, [
     { type: 'oauth2', scopes: ['probe:identity'] },
   ]);
+
+  for (const name of ['ownership_probe', 'food_entries_probe']) {
+    const probe = tools.find(
+      (tool: { name: string }) => tool.name === name
+    );
+
+    assert.deepEqual(probe?._meta?.securitySchemes, [
+      { type: 'oauth2', scopes: ['probe:identity'] },
+    ]);
+  }
+
+  const realFood = tools.find(
+    (tool: { name: string }) => tool.name === 'read_food_entries'
+  );
+
+  assert.deepEqual(realFood?._meta?.securitySchemes, [
+    { type: 'oauth2', scopes: ['food:read'] },
+  ]);
   assert.equal(verifications, 0, 'Discovery must not require a token');
-  console.log('PASS: anonymous initialize and tools/list expose only identity_probe');
+  console.log('PASS: anonymous initialize and tools/list expose current scoped contract');
 
   const base64Discovery = await handler({
     rawPath: '/mcp',
@@ -84,7 +127,7 @@ async function run() {
 
   const anonymousCall = await post(call);
   assert.equal(anonymousCall.statusCode, 200);
-  const challenge = JSON.parse(anonymousCall.body).result;
+  const challenge = parseMcpBody(anonymousCall.body).result;
   assert.equal(challenge.isError, true);
   assert.match(
     challenge._meta['mcp/www_authenticate'][0],
@@ -129,7 +172,7 @@ async function run() {
     Authorization: 'Bearer synthetic-valid-token',
   });
   assert.equal(authenticatedCall.statusCode, 200);
-  const result = JSON.parse(authenticatedCall.body).result;
+  const result = parseMcpBody(authenticatedCall.body).result;
   assert.equal(result.isError, undefined);
   assert.deepEqual(JSON.parse(result.content[0].text), {
     authenticated: true,
