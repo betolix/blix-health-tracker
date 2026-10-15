@@ -1,10 +1,17 @@
 import { Server } from "@modelcontextprotocol/server";
 import { MCP_RESOURCE, PROBE_SCOPE } from './auth0-probe';
-import { FOOD_READ_SCOPE } from './oauth-scope';
+import {
+  FOOD_READ_SCOPE,
+  VITAL_READ_SCOPE,
+} from './oauth-scope';
 import type {
   FoodEntryReadInput,
   FoodEntryReadResult,
 } from './food-entry-reader';
+import type {
+  VitalReadInput,
+  VitalReadResult,
+} from './vital-reader';
 import { syntheticProbeOwnerFromVerifiedAuth0Subject } from './cognito-owner';
 import { countMatchingSyntheticProbeRows } from './ownership-probe';
 import { listSyntheticFoodEntries } from './synthetic-food-entry-probe';
@@ -17,9 +24,17 @@ const foodReadSecuritySchemes = [
   { type: 'oauth2', scopes: [FOOD_READ_SCOPE] },
 ];
 
+const vitalReadSecuritySchemes = [
+  { type: 'oauth2', scopes: [VITAL_READ_SCOPE] },
+];
+
 type RealFoodReader = (
   input: FoodEntryReadInput,
 ) => Promise<FoodEntryReadResult[]>;
+
+type RealVitalReader = (
+  input: VitalReadInput,
+) => Promise<VitalReadResult[]>;
 
 const challenge =
   `Bearer resource_metadata="${MCP_RESOURCE}.well-known/oauth-protected-resource", ` +
@@ -34,6 +49,7 @@ export function createIdentityProbeServer(
   verifiedAuth0Subject?: string,
   readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
   readRealFood?: RealFoodReader,
+  readRealVitals?: RealVitalReader,
 ) {
   const server = new Server(
     {
@@ -108,6 +124,29 @@ export function createIdentityProbeServer(
           openWorldHint: false,
         },
       },
+      {
+        name: 'read_vitals',
+        title: 'Read vitals',
+        description:
+          'Read the authenticated user’s vitals for a bounded date range.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            from: { type: 'string' as const },
+            to: { type: 'string' as const },
+          },
+          required: ['from', 'to'],
+          additionalProperties: false,
+        },
+        securitySchemes: vitalReadSecuritySchemes,
+        _meta: { securitySchemes: vitalReadSecuritySchemes },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
     ],
   }));
 
@@ -116,7 +155,8 @@ export function createIdentityProbeServer(
       request.params.name !== 'identity_probe' &&
       request.params.name !== 'ownership_probe' &&
       request.params.name !== 'food_entries_probe' &&
-      request.params.name !== 'read_food_entries'
+      request.params.name !== 'read_food_entries' &&
+      request.params.name !== 'read_vitals'
     ) {
       throw new Error('Unknown tool');
     }
@@ -181,6 +221,70 @@ export function createIdentityProbeServer(
           isError: true,
           content: [
             { type: 'text' as const, text: 'FoodEntry read unavailable' },
+          ],
+        };
+      }
+    }
+
+    if (request.params.name === 'read_vitals') {
+      const args = request.params.arguments;
+
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        Array.isArray(args) ||
+        Object.keys(args).length !== 2 ||
+        !Object.prototype.hasOwnProperty.call(args, 'from') ||
+        !Object.prototype.hasOwnProperty.call(args, 'to') ||
+        typeof (args as { from?: unknown }).from !== 'string' ||
+        typeof (args as { to?: unknown }).to !== 'string'
+      ) {
+        return {
+          isError: true,
+          content: [
+            { type: 'text' as const, text: 'Invalid arguments' },
+          ],
+        };
+      }
+
+      if (!verifiedAuth0Subject) {
+        return {
+          isError: true,
+          content: [
+            { type: 'text' as const, text: 'Authentication required' },
+          ],
+        };
+      }
+
+      if (!readRealVitals) {
+        return {
+          isError: true,
+          content: [
+            { type: 'text' as const, text: 'Vital read unavailable' },
+          ],
+        };
+      }
+
+      try {
+        const vitals = await readRealVitals({
+          verifiedSubject: verifiedAuth0Subject,
+          from: (args as { from: string }).from,
+          to: (args as { to: string }).to,
+        });
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({ vitals }),
+            },
+          ],
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [
+            { type: 'text' as const, text: 'Vital read unavailable' },
           ],
         };
       }

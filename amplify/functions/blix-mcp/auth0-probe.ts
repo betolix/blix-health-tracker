@@ -5,6 +5,7 @@ import {
   FOOD_READ_SCOPE,
   InsufficientOAuthScopeError,
   PROBE_SCOPE,
+  VITAL_READ_SCOPE,
   requireOAuthScope,
 } from './oauth-scope';
 
@@ -95,6 +96,23 @@ export async function verifyFoodReadToken(
   const payload = await tokenVerifier.verify(token);
 
   requireOAuthScope(payload.scope, FOOD_READ_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+
+export async function verifyVitalReadToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, VITAL_READ_SCOPE);
 
   const verifiedSubject = payload.sub;
   if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {

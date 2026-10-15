@@ -17,10 +17,12 @@ import {
   PROBE_SCOPE,
   verifyFoodReadToken,
   verifyIdentityProbeToken,
+  verifyVitalReadToken,
 } from './auth0-probe';
 import {
   FOOD_READ_SCOPE,
   InsufficientOAuthScopeError,
+  VITAL_READ_SCOPE,
 } from './oauth-scope';
 import {
   classifyMcpRequestAuth,
@@ -35,6 +37,10 @@ import {
   readFoodEntries,
   type FoodEntryReadInput,
 } from './food-entry-reader';
+import {
+  readVitals,
+  type VitalReadInput,
+} from './vital-reader';
 
 // Deployed by resource.ts. The real FoodEntry tool remains fail-closed unless a reader is explicitly injected.
 type HttpEvent = {
@@ -172,9 +178,17 @@ type FoodVerifier = (
   token: string
 ) => Promise<{ verifiedSubject: string }>;
 
+type VitalVerifier = (
+  token: string
+) => Promise<{ verifiedSubject: string }>;
+
 type RealFoodReader = (
   input: FoodEntryReadInput,
 ) => ReturnType<typeof readFoodEntries>;
+
+type RealVitalReader = (
+  input: VitalReadInput,
+) => ReturnType<typeof readVitals>;
 
 const dynamoDb = new DynamoDBClient({});
 
@@ -184,11 +198,19 @@ const productionFoodReader: RealFoodReader = (input) =>
     send: (command) => dynamoDb.send(command),
   });
 
+const productionVitalReader: RealVitalReader = (input) =>
+  readVitals(input, {
+    tableName: process.env.VITAL_TABLE_NAME ?? '',
+    send: (command) => dynamoDb.send(command),
+  });
+
 export function createIdentityProbeHandler(
   verifyToken: ProbeVerifier = verifyIdentityProbeToken,
   readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
   verifyFoodToken: FoodVerifier = verifyFoodReadToken,
   readRealFood?: RealFoodReader,
+  verifyVitalToken: VitalVerifier = verifyVitalReadToken,
+  readRealVitals?: RealVitalReader,
 ) {
   return async (event: HttpEvent) => {
     const method = event.requestContext?.http?.method;
@@ -290,6 +312,11 @@ export function createIdentityProbeHandler(
           requestAuth.requiredScope === FOOD_READ_SCOPE
         ) {
           ({ verifiedSubject } = await verifyFoodToken(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === VITAL_READ_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyVitalToken(token));
         } else if (requestAuth.kind === 'discovery') {
           try {
             ({ fingerprint, verifiedSubject } = await verifyToken(token));
@@ -301,7 +328,15 @@ export function createIdentityProbeHandler(
               throw error;
             }
 
-            ({ verifiedSubject } = await verifyFoodToken(token));
+            try {
+              ({ verifiedSubject } = await verifyFoodToken(token));
+            } catch (foodError) {
+              if (!(foodError instanceof InsufficientOAuthScopeError)) {
+                throw foodError;
+              }
+
+              ({ verifiedSubject } = await verifyVitalToken(token));
+            }
           }
         } else {
           ({ fingerprint, verifiedSubject } = await verifyToken(token));
@@ -340,6 +375,7 @@ export function createIdentityProbeHandler(
         verifiedSubject,
         readSyntheticFood,
         readRealFood,
+        readRealVitals,
       ),
       { responseMode: 'json' }
     );
@@ -381,4 +417,6 @@ export const handler = createIdentityProbeHandler(
   listSyntheticFoodEntries,
   verifyFoodReadToken,
   productionFoodReader,
+  verifyVitalReadToken,
+  productionVitalReader,
 );
