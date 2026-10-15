@@ -77,6 +77,19 @@ const schema = a.schema({
         allow.owner().to(['read', 'delete']),
       ]),
     })
+    .secondaryIndexes((index) => [
+      index('owner')
+        .sortKeys(['date'])
+        .name('byOwnerAndDate')
+        .projection('INCLUDE', [
+          'calories',
+          'protein',
+          'carbs',
+          'fat',
+          'fiber',
+          'targetWeightKg',
+        ]),
+    ])
     .authorization((allow) => [
       allow.owner(),
     ]),
