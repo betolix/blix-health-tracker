@@ -36,6 +36,14 @@ vitalCfnTable.pointInTimeRecoveryEnabled = true;
 vitalCfnTable.deletionProtectionEnabled = true;
 vitalCfnTable.applyRemovalPolicy(RemovalPolicy.RETAIN);
 
+// Protect DailyTarget before exposing its owner/date index to MCP.
+const dailyTargetCfnTable =
+  backend.data.resources.cfnResources.amplifyDynamoDbTables['DailyTarget'];
+
+dailyTargetCfnTable.pointInTimeRecoveryEnabled = true;
+dailyTargetCfnTable.deletionProtectionEnabled = true;
+dailyTargetCfnTable.applyRemovalPolicy(RemovalPolicy.RETAIN);
+
 const foodEntryTable = backend.data.resources.tables['FoodEntry'];
 
 backend.blixMcp.resources.lambda.addToRolePolicy(
