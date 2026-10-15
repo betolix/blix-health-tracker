@@ -90,6 +90,9 @@ async function run() {
     'update_vital',
     'delete_vital',
     'read_daily_targets',
+    'create_daily_target',
+    'update_daily_target',
+    'delete_daily_target',
   ]);
   assert.deepEqual(tools[0]._meta.securitySchemes, [
     { type: 'oauth2', scopes: ['probe:identity'] },

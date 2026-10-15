@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  DAILY_TARGET_CREATE_SCOPE,
+  DAILY_TARGET_DELETE_SCOPE,
   DAILY_TARGET_READ_SCOPE,
+  DAILY_TARGET_UPDATE_SCOPE,
   FOOD_CREATE_SCOPE,
   FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
@@ -268,6 +271,72 @@ test('Vital read scope cannot authorize writes and write scopes cannot authorize
 
     assert.throws(
       () => requireOAuthScope(writeScope, VITAL_READ_SCOPE),
+      InsufficientOAuthScopeError,
+    );
+  }
+});
+
+
+test('DailyTarget write scopes are distinct least-privilege capabilities', () => {
+  assert.equal(DAILY_TARGET_CREATE_SCOPE, 'targets:create');
+  assert.equal(DAILY_TARGET_UPDATE_SCOPE, 'targets:update');
+  assert.equal(DAILY_TARGET_DELETE_SCOPE, 'targets:delete');
+
+  const scopes = [
+    PROBE_SCOPE,
+    FOOD_READ_SCOPE,
+    FOOD_CREATE_SCOPE,
+    FOOD_UPDATE_SCOPE,
+    FOOD_DELETE_SCOPE,
+    VITAL_READ_SCOPE,
+    VITAL_CREATE_SCOPE,
+    VITAL_UPDATE_SCOPE,
+    VITAL_DELETE_SCOPE,
+    DAILY_TARGET_READ_SCOPE,
+    DAILY_TARGET_CREATE_SCOPE,
+    DAILY_TARGET_UPDATE_SCOPE,
+    DAILY_TARGET_DELETE_SCOPE,
+  ];
+
+  assert.equal(new Set(scopes).size, scopes.length);
+});
+
+test('DailyTarget write scopes cannot authorize one another', () => {
+  const writes = [
+    DAILY_TARGET_CREATE_SCOPE,
+    DAILY_TARGET_UPDATE_SCOPE,
+    DAILY_TARGET_DELETE_SCOPE,
+  ];
+
+  for (const granted of writes) {
+    for (const required of writes) {
+      if (granted === required) {
+        assert.doesNotThrow(() =>
+          requireOAuthScope(granted, required)
+        );
+      } else {
+        assert.throws(
+          () => requireOAuthScope(granted, required),
+          InsufficientOAuthScopeError,
+        );
+      }
+    }
+  }
+});
+
+test('DailyTarget read scope cannot authorize writes and write scopes cannot authorize reads', () => {
+  for (const writeScope of [
+    DAILY_TARGET_CREATE_SCOPE,
+    DAILY_TARGET_UPDATE_SCOPE,
+    DAILY_TARGET_DELETE_SCOPE,
+  ]) {
+    assert.throws(
+      () => requireOAuthScope(DAILY_TARGET_READ_SCOPE, writeScope),
+      InsufficientOAuthScopeError,
+    );
+
+    assert.throws(
+      () => requireOAuthScope(writeScope, DAILY_TARGET_READ_SCOPE),
       InsufficientOAuthScopeError,
     );
   }

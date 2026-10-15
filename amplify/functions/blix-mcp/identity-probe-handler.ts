@@ -15,7 +15,10 @@ import {
   InsufficientProbeScopeError,
   MCP_RESOURCE,
   PROBE_SCOPE,
+  verifyDailyTargetCreateToken,
+  verifyDailyTargetDeleteToken,
   verifyDailyTargetReadToken,
+  verifyDailyTargetUpdateToken,
   verifyFoodCreateToken,
   verifyFoodDeleteToken,
   verifyFoodReadToken,
@@ -27,7 +30,10 @@ import {
   verifyVitalUpdateToken,
 } from './auth0-probe';
 import {
+  DAILY_TARGET_CREATE_SCOPE,
+  DAILY_TARGET_DELETE_SCOPE,
   DAILY_TARGET_READ_SCOPE,
+  DAILY_TARGET_UPDATE_SCOPE,
   FOOD_CREATE_SCOPE,
   FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
@@ -67,6 +73,14 @@ import {
   readDailyTargets,
   type DailyTargetReadInput,
 } from './daily-target-reader';
+import {
+  createDailyTarget,
+  deleteDailyTarget,
+  updateDailyTarget,
+  type CreateDailyTargetInput,
+  type DeleteDailyTargetInput,
+  type UpdateDailyTargetInput,
+} from './daily-target-writer';
 import {
   createFoodEntry,
   deleteFoodEntry,
@@ -260,6 +274,18 @@ type RealDailyTargetReader = (
   input: DailyTargetReadInput,
 ) => ReturnType<typeof readDailyTargets>;
 
+type RealDailyTargetCreator = (
+  input: CreateDailyTargetInput,
+) => ReturnType<typeof createDailyTarget>;
+
+type RealDailyTargetUpdater = (
+  input: UpdateDailyTargetInput,
+) => ReturnType<typeof updateDailyTarget>;
+
+type RealDailyTargetDeleter = (
+  input: DeleteDailyTargetInput,
+) => ReturnType<typeof deleteDailyTarget>;
+
 const dynamoDb = new DynamoDBClient({});
 
 const productionFoodReader: RealFoodReader = (input) =>
@@ -312,6 +338,22 @@ const productionDailyTargetReader: RealDailyTargetReader = (input) =>
     send: (command) => dynamoDb.send(command),
   });
 
+const productionDailyTargetWriterDependencies = {
+  tableName: process.env.DAILY_TARGET_TABLE_NAME ?? '',
+  put: (command: any) => dynamoDb.send(command),
+  update: (command: any) => dynamoDb.send(command),
+  delete: (command: any) => dynamoDb.send(command),
+};
+
+const productionDailyTargetCreator: RealDailyTargetCreator = (input) =>
+  createDailyTarget(input, productionDailyTargetWriterDependencies);
+
+const productionDailyTargetUpdater: RealDailyTargetUpdater = (input) =>
+  updateDailyTarget(input, productionDailyTargetWriterDependencies);
+
+const productionDailyTargetDeleter: RealDailyTargetDeleter = (input) =>
+  deleteDailyTarget(input, productionDailyTargetWriterDependencies);
+
 export function createIdentityProbeHandler(
   verifyToken: ProbeVerifier = verifyIdentityProbeToken,
   readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
@@ -333,6 +375,12 @@ export function createIdentityProbeHandler(
   updateRealVital?: RealVitalUpdater,
   verifyVitalDelete: FoodWriteVerifier = verifyVitalDeleteToken,
   deleteRealVital?: RealVitalDeleter,
+  verifyDailyTargetCreate: FoodWriteVerifier = verifyDailyTargetCreateToken,
+  createRealDailyTarget?: RealDailyTargetCreator,
+  verifyDailyTargetUpdate: FoodWriteVerifier = verifyDailyTargetUpdateToken,
+  updateRealDailyTarget?: RealDailyTargetUpdater,
+  verifyDailyTargetDelete: FoodWriteVerifier = verifyDailyTargetDeleteToken,
+  deleteRealDailyTarget?: RealDailyTargetDeleter,
 ) {
   return async (event: HttpEvent) => {
     const method = event.requestContext?.http?.method;
@@ -474,6 +522,21 @@ export function createIdentityProbeHandler(
           requestAuth.requiredScope === DAILY_TARGET_READ_SCOPE
         ) {
           ({ verifiedSubject } = await verifyDailyTargetToken(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === DAILY_TARGET_CREATE_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyDailyTargetCreate(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === DAILY_TARGET_UPDATE_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyDailyTargetUpdate(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === DAILY_TARGET_DELETE_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyDailyTargetDelete(token));
         } else if (requestAuth.kind === 'discovery') {
           try {
             ({ fingerprint, verifiedSubject } = await verifyToken(token));
@@ -541,7 +604,31 @@ export function createIdentityProbeHandler(
                               throw vitalDeleteError;
                             }
 
-                            ({ verifiedSubject } = await verifyDailyTargetToken(token));
+                            try {
+                              ({ verifiedSubject } = await verifyDailyTargetToken(token));
+                            } catch (targetReadError) {
+                              if (!(targetReadError instanceof InsufficientOAuthScopeError)) {
+                                throw targetReadError;
+                              }
+
+                              try {
+                                ({ verifiedSubject } = await verifyDailyTargetCreate(token));
+                              } catch (targetCreateError) {
+                                if (!(targetCreateError instanceof InsufficientOAuthScopeError)) {
+                                  throw targetCreateError;
+                                }
+
+                                try {
+                                  ({ verifiedSubject } = await verifyDailyTargetUpdate(token));
+                                } catch (targetUpdateError) {
+                                  if (!(targetUpdateError instanceof InsufficientOAuthScopeError)) {
+                                    throw targetUpdateError;
+                                  }
+
+                                  ({ verifiedSubject } = await verifyDailyTargetDelete(token));
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -596,6 +683,9 @@ export function createIdentityProbeHandler(
         createRealVital,
         updateRealVital,
         deleteRealVital,
+        createRealDailyTarget,
+        updateRealDailyTarget,
+        deleteRealDailyTarget,
       ),
       { responseMode: 'json' }
     );
@@ -653,4 +743,10 @@ export const handler = createIdentityProbeHandler(
   productionVitalUpdater,
   verifyVitalDeleteToken,
   productionVitalDeleter,
+  verifyDailyTargetCreateToken,
+  productionDailyTargetCreator,
+  verifyDailyTargetUpdateToken,
+  productionDailyTargetUpdater,
+  verifyDailyTargetDeleteToken,
+  productionDailyTargetDeleter,
 );

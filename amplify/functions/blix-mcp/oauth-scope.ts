@@ -8,6 +8,9 @@ export const VITAL_CREATE_SCOPE = 'vitals:create';
 export const VITAL_UPDATE_SCOPE = 'vitals:update';
 export const VITAL_DELETE_SCOPE = 'vitals:delete';
 export const DAILY_TARGET_READ_SCOPE = 'targets:read';
+export const DAILY_TARGET_CREATE_SCOPE = 'targets:create';
+export const DAILY_TARGET_UPDATE_SCOPE = 'targets:update';
+export const DAILY_TARGET_DELETE_SCOPE = 'targets:delete';
 
 export class InsufficientOAuthScopeError extends Error {
   constructor() {

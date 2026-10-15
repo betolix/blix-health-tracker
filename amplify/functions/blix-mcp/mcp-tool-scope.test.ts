@@ -5,7 +5,10 @@ import {
   UnknownProtectedToolError,
 } from './mcp-tool-scope.ts';
 import {
+  DAILY_TARGET_CREATE_SCOPE,
+  DAILY_TARGET_DELETE_SCOPE,
   DAILY_TARGET_READ_SCOPE,
+  DAILY_TARGET_UPDATE_SCOPE,
   FOOD_CREATE_SCOPE,
   FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
@@ -72,6 +75,21 @@ test('real Vital read requires only vitals:read', () => {
   assert.equal(
     requiredOAuthScopeForTool('read_vitals'),
     VITAL_READ_SCOPE,
+  );
+});
+
+test('DailyTarget write tools require distinct exact scopes', () => {
+  assert.equal(
+    requiredOAuthScopeForTool('create_daily_target'),
+    DAILY_TARGET_CREATE_SCOPE,
+  );
+  assert.equal(
+    requiredOAuthScopeForTool('update_daily_target'),
+    DAILY_TARGET_UPDATE_SCOPE,
+  );
+  assert.equal(
+    requiredOAuthScopeForTool('delete_daily_target'),
+    DAILY_TARGET_DELETE_SCOPE,
   );
 });
 
