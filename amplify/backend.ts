@@ -1,4 +1,5 @@
 import { foodEntryReadPolicy } from './functions/blix-mcp/food-entry-read-policy';
+import { foodEntryWritePolicy } from './functions/blix-mcp/food-entry-write-policy';
 import { vitalReadPolicy } from './functions/blix-mcp/vital-read-policy';
 import { dailyTargetReadPolicy } from './functions/blix-mcp/daily-target-read-policy';
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
@@ -49,6 +50,10 @@ const foodEntryTable = backend.data.resources.tables['FoodEntry'];
 
 backend.blixMcp.resources.lambda.addToRolePolicy(
   foodEntryReadPolicy(foodEntryTable.tableArn),
+);
+
+backend.blixMcp.resources.lambda.addToRolePolicy(
+  foodEntryWritePolicy(foodEntryTable.tableArn),
 );
 
 backend.blixMcp.resources.lambda.addEnvironment(

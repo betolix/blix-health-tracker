@@ -6,7 +6,10 @@ import {
 } from './mcp-tool-scope.ts';
 import {
   DAILY_TARGET_READ_SCOPE,
+  FOOD_CREATE_SCOPE,
+  FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
+  FOOD_UPDATE_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
 } from './oauth-scope.ts';
@@ -28,6 +31,22 @@ test('real FoodEntry read requires only food:read', () => {
   assert.equal(
     requiredOAuthScopeForTool('read_food_entries'),
     FOOD_READ_SCOPE,
+  );
+});
+
+
+test('FoodEntry write tools require distinct exact scopes', () => {
+  assert.equal(
+    requiredOAuthScopeForTool('create_food_entry'),
+    FOOD_CREATE_SCOPE,
+  );
+  assert.equal(
+    requiredOAuthScopeForTool('update_food_entry'),
+    FOOD_UPDATE_SCOPE,
+  );
+  assert.equal(
+    requiredOAuthScopeForTool('delete_food_entry'),
+    FOOD_DELETE_SCOPE,
   );
 });
 

@@ -3,7 +3,10 @@ import { JwtVerifier } from 'aws-jwt-verify';
 import type { JwksCache } from 'aws-jwt-verify/jwk';
 import {
   DAILY_TARGET_READ_SCOPE,
+  FOOD_CREATE_SCOPE,
+  FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
+  FOOD_UPDATE_SCOPE,
   InsufficientOAuthScopeError,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
@@ -130,6 +133,55 @@ export async function verifyDailyTargetReadToken(
   const payload = await tokenVerifier.verify(token);
 
   requireOAuthScope(payload.scope, DAILY_TARGET_READ_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+
+export async function verifyFoodCreateToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, FOOD_CREATE_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+export async function verifyFoodUpdateToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, FOOD_UPDATE_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+export async function verifyFoodDeleteToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, FOOD_DELETE_SCOPE);
 
   const verifiedSubject = payload.sub;
   if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {

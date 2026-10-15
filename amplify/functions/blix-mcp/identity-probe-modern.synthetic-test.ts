@@ -111,7 +111,15 @@ async function main() {
   );
   assert.deepEqual(
     metadataResponses[0].data?.scopes_supported,
-    ['probe:identity', 'food:read', 'vitals:read', 'targets:read'],
+    [
+      'probe:identity',
+      'food:read',
+      'food:create',
+      'food:update',
+      'food:delete',
+      'vitals:read',
+      'targets:read',
+    ],
     'Protected-resource metadata must advertise exactly the supported MCP scopes'
   );
   console.log('PASS: all protected-resource metadata routes are consistent');
@@ -135,6 +143,9 @@ async function main() {
       'ownership_probe',
       'food_entries_probe',
       'read_food_entries',
+      'create_food_entry',
+      'update_food_entry',
+      'delete_food_entry',
       'read_vitals',
       'read_daily_targets',
     ],
@@ -190,11 +201,11 @@ async function main() {
       ].includes(tool.name)
     ),
     false,
-    'No writes or DailyTarget tools may be exposed'
+    'No legacy or unapproved write tools may be exposed'
   );
 
   console.log(
-    'PASS: synthetic probes plus scoped FoodEntry, Vital and DailyTarget reads exposed'
+    'PASS: scoped FoodEntry reads/writes plus Vital and DailyTarget reads exposed'
   );
 
   const anonymous = await rpc('tools/call', {
