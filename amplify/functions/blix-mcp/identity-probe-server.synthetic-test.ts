@@ -36,6 +36,7 @@ async function main() {
             'food_entries_probe',
             'read_food_entries',
           'read_vitals',
+      'read_daily_targets',
           ]),
         'Unexpected MCP tool contract'
       );

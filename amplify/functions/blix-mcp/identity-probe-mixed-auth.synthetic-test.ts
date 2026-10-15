@@ -83,6 +83,7 @@ async function run() {
     'food_entries_probe',
     'read_food_entries',
     'read_vitals',
+    'read_daily_targets',
   ]);
   assert.deepEqual(tools[0]._meta.securitySchemes, [
     { type: 'oauth2', scopes: ['probe:identity'] },

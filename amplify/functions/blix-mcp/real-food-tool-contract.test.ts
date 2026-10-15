@@ -54,6 +54,7 @@ test('tools/list exposes real FoodEntry read with food-only OAuth metadata', asy
         'food_entries_probe',
         'read_food_entries',
         'read_vitals',
+      'read_daily_targets',
       ],
     );
 

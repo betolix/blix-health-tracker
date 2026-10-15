@@ -5,6 +5,7 @@ import {
   InvalidProtectedMcpRequestError,
 } from './mcp-request-auth.ts';
 import {
+  DAILY_TARGET_READ_SCOPE,
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
@@ -79,9 +80,19 @@ test('real Vital read is classified as vitals:read', () => {
   );
 });
 
+test('real DailyTarget read is classified as targets:read', () => {
+  assert.deepEqual(
+    classifyMcpRequestAuth(call('read_daily_targets')),
+    {
+      kind: 'protected-tool',
+      toolName: 'read_daily_targets',
+      requiredScope: DAILY_TARGET_READ_SCOPE,
+    },
+  );
+});
+
 test('unknown protected tools fail closed instead of receiving a fallback scope', () => {
   for (const name of [
-    'read_daily_targets',
     'health_read',
     '',
     null,

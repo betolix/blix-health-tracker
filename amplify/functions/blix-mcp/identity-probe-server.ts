@@ -1,6 +1,7 @@
 import { Server } from "@modelcontextprotocol/server";
 import { MCP_RESOURCE, PROBE_SCOPE } from './auth0-probe';
 import {
+  DAILY_TARGET_READ_SCOPE,
   FOOD_READ_SCOPE,
   VITAL_READ_SCOPE,
 } from './oauth-scope';
@@ -12,6 +13,10 @@ import type {
   VitalReadInput,
   VitalReadResult,
 } from './vital-reader';
+import type {
+  DailyTargetReadInput,
+  DailyTargetReadResult,
+} from './daily-target-reader';
 import { syntheticProbeOwnerFromVerifiedAuth0Subject } from './cognito-owner';
 import { countMatchingSyntheticProbeRows } from './ownership-probe';
 import { listSyntheticFoodEntries } from './synthetic-food-entry-probe';
@@ -28,6 +33,10 @@ const vitalReadSecuritySchemes = [
   { type: 'oauth2', scopes: [VITAL_READ_SCOPE] },
 ];
 
+const dailyTargetReadSecuritySchemes = [
+  { type: 'oauth2', scopes: [DAILY_TARGET_READ_SCOPE] },
+];
+
 type RealFoodReader = (
   input: FoodEntryReadInput,
 ) => Promise<FoodEntryReadResult[]>;
@@ -35,6 +44,10 @@ type RealFoodReader = (
 type RealVitalReader = (
   input: VitalReadInput,
 ) => Promise<VitalReadResult[]>;
+
+type RealDailyTargetReader = (
+  input: DailyTargetReadInput,
+) => Promise<DailyTargetReadResult[]>;
 
 const challenge =
   `Bearer resource_metadata="${MCP_RESOURCE}.well-known/oauth-protected-resource", ` +
@@ -50,6 +63,7 @@ export function createIdentityProbeServer(
   readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
   readRealFood?: RealFoodReader,
   readRealVitals?: RealVitalReader,
+  readRealDailyTargets?: RealDailyTargetReader,
 ) {
   const server = new Server(
     {
@@ -147,6 +161,29 @@ export function createIdentityProbeServer(
           openWorldHint: false,
         },
       },
+      {
+        name: 'read_daily_targets',
+        title: 'Read daily targets',
+        description:
+          'Read the authenticated user’s daily nutrition targets for a bounded date range.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            from: { type: 'string' as const },
+            to: { type: 'string' as const },
+          },
+          required: ['from', 'to'],
+          additionalProperties: false,
+        },
+        securitySchemes: dailyTargetReadSecuritySchemes,
+        _meta: { securitySchemes: dailyTargetReadSecuritySchemes },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
     ],
   }));
 
@@ -156,7 +193,8 @@ export function createIdentityProbeServer(
       request.params.name !== 'ownership_probe' &&
       request.params.name !== 'food_entries_probe' &&
       request.params.name !== 'read_food_entries' &&
-      request.params.name !== 'read_vitals'
+      request.params.name !== 'read_vitals' &&
+      request.params.name !== 'read_daily_targets'
     ) {
       throw new Error('Unknown tool');
     }
@@ -285,6 +323,70 @@ export function createIdentityProbeServer(
           isError: true,
           content: [
             { type: 'text' as const, text: 'Vital read unavailable' },
+          ],
+        };
+      }
+    }
+
+    if (request.params.name === 'read_daily_targets') {
+      const args = request.params.arguments;
+
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        Array.isArray(args) ||
+        Object.keys(args).length !== 2 ||
+        !Object.prototype.hasOwnProperty.call(args, 'from') ||
+        !Object.prototype.hasOwnProperty.call(args, 'to') ||
+        typeof (args as { from?: unknown }).from !== 'string' ||
+        typeof (args as { to?: unknown }).to !== 'string'
+      ) {
+        return {
+          isError: true,
+          content: [
+            { type: 'text' as const, text: 'Invalid arguments' },
+          ],
+        };
+      }
+
+      if (!verifiedAuth0Subject) {
+        return {
+          isError: true,
+          content: [
+            { type: 'text' as const, text: 'Authentication required' },
+          ],
+        };
+      }
+
+      if (!readRealDailyTargets) {
+        return {
+          isError: true,
+          content: [
+            { type: 'text' as const, text: 'DailyTarget read unavailable' },
+          ],
+        };
+      }
+
+      try {
+        const targets = await readRealDailyTargets({
+          verifiedSubject: verifiedAuth0Subject,
+          from: (args as { from: string }).from,
+          to: (args as { to: string }).to,
+        });
+
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({ targets }),
+            },
+          ],
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [
+            { type: 'text' as const, text: 'DailyTarget read unavailable' },
           ],
         };
       }

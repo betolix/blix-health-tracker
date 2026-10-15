@@ -5,6 +5,7 @@ import {
   UnknownProtectedToolError,
 } from './mcp-tool-scope.ts';
 import {
+  DAILY_TARGET_READ_SCOPE,
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
@@ -33,6 +34,28 @@ test('real FoodEntry read requires only food:read', () => {
 test('real Vital read requires only vitals:read', () => {
   assert.equal(
     requiredOAuthScopeForTool('read_vitals'),
+    VITAL_READ_SCOPE,
+  );
+});
+
+test('real DailyTarget read requires only targets:read', () => {
+  assert.equal(
+    requiredOAuthScopeForTool('read_daily_targets'),
+    DAILY_TARGET_READ_SCOPE,
+  );
+});
+
+test('real DailyTarget read cannot fall back to other scopes', () => {
+  assert.notEqual(
+    requiredOAuthScopeForTool('read_daily_targets'),
+    PROBE_SCOPE,
+  );
+  assert.notEqual(
+    requiredOAuthScopeForTool('read_daily_targets'),
+    FOOD_READ_SCOPE,
+  );
+  assert.notEqual(
+    requiredOAuthScopeForTool('read_daily_targets'),
     VITAL_READ_SCOPE,
   );
 });
@@ -92,7 +115,8 @@ test('caller-controlled scope strings are not interpreted as tool names', () => 
     PROBE_SCOPE,
     FOOD_READ_SCOPE,
     VITAL_READ_SCOPE,
-    `${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE}`,
+    DAILY_TARGET_READ_SCOPE,
+    `${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE} ${DAILY_TARGET_READ_SCOPE}`,
   ]) {
     assert.throws(
       () => requiredOAuthScopeForTool(supplied),
