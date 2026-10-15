@@ -2,7 +2,6 @@ import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { AttributeType, BillingMode, ProjectionType, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { blixMcp } from './functions/blix-mcp/resource';
-import { foodEntryReadPolicy } from './functions/blix-mcp/food-entry-read-policy';
 import { RemovalPolicy } from 'aws-cdk-lib';
 import { defineBackend } from '@aws-amplify/backend';
 import {
@@ -40,13 +39,6 @@ backend.blixMcp.resources.lambda.addToRolePolicy(new PolicyStatement({
 backend.blixMcp.resources.lambda.addEnvironment(
   'OWNERSHIP_PROBE_TABLE_NAME',
   ownershipProbeTable.tableName,
-);
-
-// Real FoodEntry read gate. Query is restricted to the owner/date GSI.
-// No table-level, Scan, item-read, or write permission is granted.
-const foodEntryTable = backend.data.resources.tables['FoodEntry'];
-backend.blixMcp.resources.lambda.addToRolePolicy(
-  foodEntryReadPolicy(foodEntryTable.tableArn),
 );
 
 // ISOLATED SYNTHETIC DATASET. Not an Amplify Data model and not health data.
