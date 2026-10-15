@@ -8,10 +8,12 @@ import {
   createIdentityProbeVerifier,
   verifyFoodReadToken,
   verifyIdentityProbeToken,
+  verifyVitalReadToken,
 } from './auth0-probe';
 import {
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
+  VITAL_READ_SCOPE,
 } from './oauth-scope';
 
 const trusted = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -81,7 +83,10 @@ async function rejects(fn: () => Promise<unknown>) {
 
 const probeOnly = token(PROBE_SCOPE);
 const foodOnly = token(FOOD_READ_SCOPE);
-const both = token(`${PROBE_SCOPE} ${FOOD_READ_SCOPE}`);
+const vitalOnly = token(VITAL_READ_SCOPE);
+const allScopes = token(
+  `${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE}`
+);
 
 // probe:identity authorizes only the synthetic probe verifier.
 await verifyIdentityProbeToken(probeOnly, verifier);
@@ -95,9 +100,22 @@ assert.equal(
 );
 await rejects(() => verifyIdentityProbeToken(foodOnly, verifier));
 
-// A token explicitly granted both capabilities may satisfy both.
-await verifyIdentityProbeToken(both, verifier);
-await verifyFoodReadToken(both, verifier);
+// vitals:read authorizes only the Vital verifier.
+const vitalIdentity = await verifyVitalReadToken(vitalOnly, verifier);
+assert.equal(
+  vitalIdentity.verifiedSubject,
+  'oidc|blix-cognito|11111111-1111-4111-8111-111111111111',
+);
+await rejects(() => verifyFoodReadToken(vitalOnly, verifier));
+await rejects(() => verifyIdentityProbeToken(vitalOnly, verifier));
+
+await rejects(() => verifyVitalReadToken(foodOnly, verifier));
+await rejects(() => verifyVitalReadToken(probeOnly, verifier));
+
+// A token explicitly granted all capabilities may satisfy all.
+await verifyIdentityProbeToken(allScopes, verifier);
+await verifyFoodReadToken(allScopes, verifier);
+await verifyVitalReadToken(allScopes, verifier);
 
 // food:read is not sufficient unless the JWT itself is cryptographically
 // valid and bound to the expected issuer, audience, and OAuth client.
@@ -132,7 +150,8 @@ await rejects(() =>
 console.log('PASS: probe:identity cannot authorize FoodEntry reads');
 console.log('PASS: food:read cannot authorize synthetic probes');
 console.log('PASS: food:read returns only verified server-side identity');
-console.log('PASS: explicitly combined scopes satisfy both verifiers');
+console.log('PASS: vitals:read is isolated from probe and food scopes');
+console.log('PASS: explicitly combined scopes satisfy all verifiers');
 console.log('PASS: food:read rejects an untrusted signature');
 console.log('PASS: food:read rejects an unexpected issuer');
 console.log('PASS: food:read rejects an unexpected audience');

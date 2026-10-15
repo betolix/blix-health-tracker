@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
+  VITAL_READ_SCOPE,
   InsufficientOAuthScopeError,
   requireOAuthScope,
 } from './oauth-scope.ts';
@@ -10,12 +11,29 @@ import {
 test('probe and FoodEntry scopes are distinct least-privilege capabilities', () => {
   assert.equal(PROBE_SCOPE, 'probe:identity');
   assert.equal(FOOD_READ_SCOPE, 'food:read');
+  assert.equal(VITAL_READ_SCOPE, 'vitals:read');
   assert.notEqual(PROBE_SCOPE, FOOD_READ_SCOPE);
+  assert.notEqual(PROBE_SCOPE, VITAL_READ_SCOPE);
+  assert.notEqual(FOOD_READ_SCOPE, VITAL_READ_SCOPE);
 });
 
 test('probe-only scope cannot authorize a real FoodEntry read', () => {
   assert.throws(
     () => requireOAuthScope(PROBE_SCOPE, FOOD_READ_SCOPE),
+    InsufficientOAuthScopeError,
+  );
+});
+
+test('vitals-only scope cannot authorize FoodEntry reads', () => {
+  assert.throws(
+    () => requireOAuthScope(VITAL_READ_SCOPE, FOOD_READ_SCOPE),
+    InsufficientOAuthScopeError,
+  );
+});
+
+test('food-only scope cannot authorize Vital reads', () => {
+  assert.throws(
+    () => requireOAuthScope(FOOD_READ_SCOPE, VITAL_READ_SCOPE),
     InsufficientOAuthScopeError,
   );
 });
@@ -35,10 +53,15 @@ test('the exact required scope is accepted', () => {
   assert.doesNotThrow(() =>
     requireOAuthScope(FOOD_READ_SCOPE, FOOD_READ_SCOPE),
   );
+
+  assert.doesNotThrow(() =>
+    requireOAuthScope(VITAL_READ_SCOPE, VITAL_READ_SCOPE),
+  );
 });
 
 test('multiple OAuth scopes are parsed as space-delimited capabilities', () => {
-  const granted = `openid ${PROBE_SCOPE} ${FOOD_READ_SCOPE}`;
+  const granted =
+    `openid ${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE}`;
 
   assert.doesNotThrow(() =>
     requireOAuthScope(granted, PROBE_SCOPE),
@@ -46,6 +69,10 @@ test('multiple OAuth scopes are parsed as space-delimited capabilities', () => {
 
   assert.doesNotThrow(() =>
     requireOAuthScope(granted, FOOD_READ_SCOPE),
+  );
+
+  assert.doesNotThrow(() =>
+    requireOAuthScope(granted, VITAL_READ_SCOPE),
   );
 });
 
