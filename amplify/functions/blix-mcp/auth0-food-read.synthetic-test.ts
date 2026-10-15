@@ -6,7 +6,10 @@ import {
   CHATGPT_CIMD_CLIENT_ID,
   MCP_RESOURCE,
   createIdentityProbeVerifier,
+  verifyDailyTargetCreateToken,
+  verifyDailyTargetDeleteToken,
   verifyDailyTargetReadToken,
+  verifyDailyTargetUpdateToken,
   verifyFoodCreateToken,
   verifyFoodDeleteToken,
   verifyFoodReadToken,
@@ -18,7 +21,10 @@ import {
   verifyVitalUpdateToken,
 } from './auth0-probe';
 import {
+  DAILY_TARGET_CREATE_SCOPE,
+  DAILY_TARGET_DELETE_SCOPE,
   DAILY_TARGET_READ_SCOPE,
+  DAILY_TARGET_UPDATE_SCOPE,
   FOOD_CREATE_SCOPE,
   FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
@@ -105,6 +111,9 @@ const vitalCreateOnly = token(VITAL_CREATE_SCOPE);
 const vitalUpdateOnly = token(VITAL_UPDATE_SCOPE);
 const vitalDeleteOnly = token(VITAL_DELETE_SCOPE);
 const targetOnly = token(DAILY_TARGET_READ_SCOPE);
+const targetCreateOnly = token(DAILY_TARGET_CREATE_SCOPE);
+const targetUpdateOnly = token(DAILY_TARGET_UPDATE_SCOPE);
+const targetDeleteOnly = token(DAILY_TARGET_DELETE_SCOPE);
 
 const allScopes = token(
   [
@@ -118,6 +127,9 @@ const allScopes = token(
     VITAL_UPDATE_SCOPE,
     VITAL_DELETE_SCOPE,
     DAILY_TARGET_READ_SCOPE,
+    DAILY_TARGET_CREATE_SCOPE,
+    DAILY_TARGET_UPDATE_SCOPE,
+    DAILY_TARGET_DELETE_SCOPE,
   ].join(' ')
 );
 
@@ -267,6 +279,98 @@ await rejects(() =>
   verifyDailyTargetReadToken(vitalOnly, verifier)
 );
 
+// DailyTarget write capabilities are cryptographically verified and isolated.
+const targetCreateIdentity = await verifyDailyTargetCreateToken(
+  targetCreateOnly,
+  verifier,
+);
+const targetUpdateIdentity = await verifyDailyTargetUpdateToken(
+  targetUpdateOnly,
+  verifier,
+);
+const targetDeleteIdentity = await verifyDailyTargetDeleteToken(
+  targetDeleteOnly,
+  verifier,
+);
+
+for (const identity of [
+  targetCreateIdentity,
+  targetUpdateIdentity,
+  targetDeleteIdentity,
+]) {
+  assert.equal(
+    identity.verifiedSubject,
+    'oidc|blix-cognito|11111111-1111-4111-8111-111111111111',
+  );
+}
+
+// DailyTarget read cannot authorize writes.
+await rejects(() =>
+  verifyDailyTargetCreateToken(targetOnly, verifier)
+);
+await rejects(() =>
+  verifyDailyTargetUpdateToken(targetOnly, verifier)
+);
+await rejects(() =>
+  verifyDailyTargetDeleteToken(targetOnly, verifier)
+);
+
+// DailyTarget write scopes cannot authorize one another.
+await rejects(() =>
+  verifyDailyTargetUpdateToken(targetCreateOnly, verifier)
+);
+await rejects(() =>
+  verifyDailyTargetDeleteToken(targetCreateOnly, verifier)
+);
+await rejects(() =>
+  verifyDailyTargetCreateToken(targetUpdateOnly, verifier)
+);
+await rejects(() =>
+  verifyDailyTargetDeleteToken(targetUpdateOnly, verifier)
+);
+await rejects(() =>
+  verifyDailyTargetCreateToken(targetDeleteOnly, verifier)
+);
+await rejects(() =>
+  verifyDailyTargetUpdateToken(targetDeleteOnly, verifier)
+);
+
+// DailyTarget write scopes cannot authorize reads or probes.
+for (const writeOnly of [
+  targetCreateOnly,
+  targetUpdateOnly,
+  targetDeleteOnly,
+]) {
+  await rejects(() =>
+    verifyDailyTargetReadToken(writeOnly, verifier)
+  );
+  await rejects(() =>
+    verifyIdentityProbeToken(writeOnly, verifier)
+  );
+}
+
+// DailyTarget write verifiers require a trusted JWT signature.
+await rejects(() =>
+  verifyDailyTargetCreateToken(
+    token(DAILY_TARGET_CREATE_SCOPE, {}, untrusted.privateKey),
+    verifier,
+  ),
+);
+
+await rejects(() =>
+  verifyDailyTargetUpdateToken(
+    token(DAILY_TARGET_UPDATE_SCOPE, {}, untrusted.privateKey),
+    verifier,
+  ),
+);
+
+await rejects(() =>
+  verifyDailyTargetDeleteToken(
+    token(DAILY_TARGET_DELETE_SCOPE, {}, untrusted.privateKey),
+    verifier,
+  ),
+);
+
 // FoodEntry write capabilities are cryptographically verified and isolated.
 const createIdentity = await verifyFoodCreateToken(
   foodCreateOnly,
@@ -370,6 +474,9 @@ await verifyVitalCreateToken(allScopes, verifier);
 await verifyVitalUpdateToken(allScopes, verifier);
 await verifyVitalDeleteToken(allScopes, verifier);
 await verifyDailyTargetReadToken(allScopes, verifier);
+await verifyDailyTargetCreateToken(allScopes, verifier);
+await verifyDailyTargetUpdateToken(allScopes, verifier);
+await verifyDailyTargetDeleteToken(allScopes, verifier);
 
 // food:read is not sufficient unless the JWT itself is cryptographically
 // valid and bound to the expected issuer, audience, and OAuth client.
@@ -410,6 +517,10 @@ console.log('PASS: Vital write scopes are mutually isolated');
 console.log('PASS: Vital write scopes cannot authorize reads or probes');
 console.log('PASS: Vital write verifiers reject untrusted signatures');
 console.log('PASS: targets:read is isolated from probe, food and vital scopes');
+console.log('PASS: targets:create, targets:update and targets:delete are cryptographically verified');
+console.log('PASS: DailyTarget write scopes are mutually isolated');
+console.log('PASS: DailyTarget write scopes cannot authorize reads or probes');
+console.log('PASS: DailyTarget write verifiers reject untrusted signatures');
 console.log('PASS: food:create, food:update and food:delete are cryptographically verified');
 console.log('PASS: FoodEntry write scopes are mutually isolated');
 console.log('PASS: FoodEntry write scopes cannot authorize reads or probes');

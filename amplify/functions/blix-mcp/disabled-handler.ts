@@ -1,5 +1,8 @@
 import {
+  DAILY_TARGET_CREATE_SCOPE,
+  DAILY_TARGET_DELETE_SCOPE,
   DAILY_TARGET_READ_SCOPE,
+  DAILY_TARGET_UPDATE_SCOPE,
   FOOD_CREATE_SCOPE,
   FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
@@ -58,6 +61,9 @@ export const handler = async (event: LambdaEvent) => {
           VITAL_UPDATE_SCOPE,
           VITAL_DELETE_SCOPE,
           DAILY_TARGET_READ_SCOPE,
+          DAILY_TARGET_CREATE_SCOPE,
+          DAILY_TARGET_UPDATE_SCOPE,
+          DAILY_TARGET_DELETE_SCOPE,
         ],
       }),
     };

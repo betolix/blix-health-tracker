@@ -3,6 +3,7 @@ import { foodEntryWritePolicy } from './functions/blix-mcp/food-entry-write-poli
 import { vitalReadPolicy } from './functions/blix-mcp/vital-read-policy';
 import { vitalWritePolicy } from './functions/blix-mcp/vital-write-policy';
 import { dailyTargetReadPolicy } from './functions/blix-mcp/daily-target-read-policy';
+import { dailyTargetWritePolicy } from './functions/blix-mcp/daily-target-write-policy';
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { AttributeType, BillingMode, ProjectionType, Table } from 'aws-cdk-lib/aws-dynamodb';
@@ -81,6 +82,10 @@ const dailyTargetTable = backend.data.resources.tables['DailyTarget'];
 
 backend.blixMcp.resources.lambda.addToRolePolicy(
   dailyTargetReadPolicy(dailyTargetTable.tableArn),
+);
+
+backend.blixMcp.resources.lambda.addToRolePolicy(
+  dailyTargetWritePolicy(dailyTargetTable.tableArn),
 );
 
 backend.blixMcp.resources.lambda.addEnvironment(

@@ -1,7 +1,10 @@
 import { Server } from "@modelcontextprotocol/server";
 import { MCP_RESOURCE, PROBE_SCOPE } from './auth0-probe';
 import {
+  DAILY_TARGET_CREATE_SCOPE,
+  DAILY_TARGET_DELETE_SCOPE,
   DAILY_TARGET_READ_SCOPE,
+  DAILY_TARGET_UPDATE_SCOPE,
   FOOD_CREATE_SCOPE,
   FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
@@ -29,6 +32,12 @@ import type {
   DailyTargetReadInput,
   DailyTargetReadResult,
 } from './daily-target-reader';
+import type {
+  CreateDailyTargetInput,
+  DailyTargetWriteResult,
+  DeleteDailyTargetInput,
+  UpdateDailyTargetInput,
+} from './daily-target-writer';
 import type {
   CreateFoodEntryInput,
   DeleteFoodEntryInput,
@@ -79,6 +88,18 @@ const dailyTargetReadSecuritySchemes = [
   { type: 'oauth2', scopes: [DAILY_TARGET_READ_SCOPE] },
 ];
 
+const dailyTargetCreateSecuritySchemes = [
+  { type: 'oauth2', scopes: [DAILY_TARGET_CREATE_SCOPE] },
+];
+
+const dailyTargetUpdateSecuritySchemes = [
+  { type: 'oauth2', scopes: [DAILY_TARGET_UPDATE_SCOPE] },
+];
+
+const dailyTargetDeleteSecuritySchemes = [
+  { type: 'oauth2', scopes: [DAILY_TARGET_DELETE_SCOPE] },
+];
+
 type RealFoodReader = (
   input: FoodEntryReadInput,
 ) => Promise<FoodEntryReadResult[]>;
@@ -115,6 +136,18 @@ type RealDailyTargetReader = (
   input: DailyTargetReadInput,
 ) => Promise<DailyTargetReadResult[]>;
 
+type RealDailyTargetCreator = (
+  input: CreateDailyTargetInput,
+) => Promise<DailyTargetWriteResult>;
+
+type RealDailyTargetUpdater = (
+  input: UpdateDailyTargetInput,
+) => Promise<DailyTargetWriteResult>;
+
+type RealDailyTargetDeleter = (
+  input: DeleteDailyTargetInput,
+) => Promise<DailyTargetWriteResult>;
+
 const challenge =
   `Bearer resource_metadata="${MCP_RESOURCE}.well-known/oauth-protected-resource", ` +
   'error="invalid_token", error_description="Authentication required"';
@@ -136,6 +169,9 @@ export function createIdentityProbeServer(
   createRealVital?: RealVitalCreator,
   updateRealVital?: RealVitalUpdater,
   deleteRealVital?: RealVitalDeleter,
+  createRealDailyTarget?: RealDailyTargetCreator,
+  updateRealDailyTarget?: RealDailyTargetUpdater,
+  deleteRealDailyTarget?: RealDailyTargetDeleter,
 ) {
   const server = new Server(
     {
@@ -427,6 +463,85 @@ export function createIdentityProbeServer(
           openWorldHint: false,
         },
       },
+      {
+        name: 'create_daily_target',
+        title: 'Create daily target',
+        description:
+          'Create a daily nutrition target for the authenticated user.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            date: { type: 'string' as const },
+            calories: { type: 'integer' as const },
+            protein: { type: 'number' as const },
+            carbs: { type: 'number' as const },
+            fat: { type: 'number' as const },
+            fiber: { type: 'number' as const },
+            targetWeightKg: { type: 'number' as const },
+          },
+          required: ['date', 'calories', 'protein'],
+          additionalProperties: false,
+        },
+        securitySchemes: dailyTargetCreateSecuritySchemes,
+        _meta: { securitySchemes: dailyTargetCreateSecuritySchemes },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      {
+        name: 'update_daily_target',
+        title: 'Update daily target',
+        description:
+          'Update an existing daily nutrition target owned by the authenticated user.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            id: { type: 'string' as const },
+            date: { type: 'string' as const },
+            calories: { type: 'integer' as const },
+            protein: { type: 'number' as const },
+            carbs: { type: ['number', 'null'] as const },
+            fat: { type: ['number', 'null'] as const },
+            fiber: { type: ['number', 'null'] as const },
+            targetWeightKg: { type: ['number', 'null'] as const },
+          },
+          required: ['id'],
+          additionalProperties: false,
+        },
+        securitySchemes: dailyTargetUpdateSecuritySchemes,
+        _meta: { securitySchemes: dailyTargetUpdateSecuritySchemes },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
+      {
+        name: 'delete_daily_target',
+        title: 'Delete daily target',
+        description:
+          'Delete a daily nutrition target owned by the authenticated user.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            id: { type: 'string' as const },
+          },
+          required: ['id'],
+          additionalProperties: false,
+        },
+        securitySchemes: dailyTargetDeleteSecuritySchemes,
+        _meta: { securitySchemes: dailyTargetDeleteSecuritySchemes },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
+      },
     ],
   }));
 
@@ -443,7 +558,10 @@ export function createIdentityProbeServer(
       request.params.name !== 'create_vital' &&
       request.params.name !== 'update_vital' &&
       request.params.name !== 'delete_vital' &&
-      request.params.name !== 'read_daily_targets'
+      request.params.name !== 'read_daily_targets' &&
+      request.params.name !== 'create_daily_target' &&
+      request.params.name !== 'update_daily_target' &&
+      request.params.name !== 'delete_daily_target'
     ) {
       throw new Error('Unknown tool');
     }
@@ -945,6 +1063,160 @@ export function createIdentityProbeServer(
           content: [
             { type: 'text' as const, text: 'DailyTarget read unavailable' },
           ],
+        };
+      }
+    }
+
+    if (request.params.name === 'create_daily_target') {
+      const args = request.params.arguments;
+
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        Array.isArray(args) ||
+        !verifiedAuth0Subject ||
+        !createRealDailyTarget
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'DailyTarget create unavailable' }],
+        };
+      }
+
+      const allowed = new Set([
+        'date',
+        'calories',
+        'protein',
+        'carbs',
+        'fat',
+        'fiber',
+        'targetWeightKg',
+      ]);
+
+      if (
+        Object.keys(args).some((key) => !allowed.has(key)) ||
+        typeof (args as any).date !== 'string' ||
+        typeof (args as any).calories !== 'number' ||
+        typeof (args as any).protein !== 'number'
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Invalid arguments' }],
+        };
+      }
+
+      try {
+        const result = await createRealDailyTarget({
+          verifiedSubject: verifiedAuth0Subject,
+          ...(args as Omit<CreateDailyTargetInput, 'verifiedSubject'>),
+        });
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          }],
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'DailyTarget create unavailable' }],
+        };
+      }
+    }
+
+    if (request.params.name === 'update_daily_target') {
+      const args = request.params.arguments;
+
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        Array.isArray(args) ||
+        !verifiedAuth0Subject ||
+        !updateRealDailyTarget
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'DailyTarget update unavailable' }],
+        };
+      }
+
+      const allowed = new Set([
+        'id',
+        'date',
+        'calories',
+        'protein',
+        'carbs',
+        'fat',
+        'fiber',
+        'targetWeightKg',
+      ]);
+
+      if (
+        Object.keys(args).some((key) => !allowed.has(key)) ||
+        typeof (args as any).id !== 'string' ||
+        Object.keys(args).length < 2
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Invalid arguments' }],
+        };
+      }
+
+      try {
+        const result = await updateRealDailyTarget({
+          verifiedSubject: verifiedAuth0Subject,
+          ...(args as Omit<UpdateDailyTargetInput, 'verifiedSubject'>),
+        });
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          }],
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'DailyTarget update unavailable' }],
+        };
+      }
+    }
+
+    if (request.params.name === 'delete_daily_target') {
+      const args = request.params.arguments;
+
+      if (
+        !args ||
+        typeof args !== 'object' ||
+        Array.isArray(args) ||
+        Object.keys(args).length !== 1 ||
+        typeof (args as any).id !== 'string' ||
+        !verifiedAuth0Subject ||
+        !deleteRealDailyTarget
+      ) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'Invalid arguments' }],
+        };
+      }
+
+      try {
+        const result = await deleteRealDailyTarget({
+          verifiedSubject: verifiedAuth0Subject,
+          id: (args as { id: string }).id,
+        });
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          }],
+        };
+      } catch {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: 'DailyTarget delete unavailable' }],
         };
       }
     }

@@ -122,6 +122,9 @@ async function main() {
     'vitals:update',
     'vitals:delete',
       'targets:read',
+    'targets:create',
+    'targets:update',
+    'targets:delete',
     ],
     'Protected-resource metadata must advertise exactly the supported MCP scopes'
   );
@@ -154,6 +157,9 @@ async function main() {
       'update_vital',
       'delete_vital',
       'read_daily_targets',
+      'create_daily_target',
+      'update_daily_target',
+      'delete_daily_target',
     ],
     'Unexpected tools exposed'
   );

@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { JwtVerifier } from 'aws-jwt-verify';
 import type { JwksCache } from 'aws-jwt-verify/jwk';
 import {
+  DAILY_TARGET_CREATE_SCOPE,
+  DAILY_TARGET_DELETE_SCOPE,
   DAILY_TARGET_READ_SCOPE,
+  DAILY_TARGET_UPDATE_SCOPE,
   FOOD_CREATE_SCOPE,
   FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
@@ -234,6 +237,55 @@ export async function verifyVitalDeleteToken(
   const payload = await tokenVerifier.verify(token);
 
   requireOAuthScope(payload.scope, VITAL_DELETE_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+
+export async function verifyDailyTargetCreateToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, DAILY_TARGET_CREATE_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+export async function verifyDailyTargetUpdateToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, DAILY_TARGET_UPDATE_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+export async function verifyDailyTargetDeleteToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, DAILY_TARGET_DELETE_SCOPE);
 
   const verifiedSubject = payload.sub;
   if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {

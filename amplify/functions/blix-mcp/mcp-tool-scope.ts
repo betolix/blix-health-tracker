@@ -1,5 +1,8 @@
 import {
+  DAILY_TARGET_CREATE_SCOPE,
+  DAILY_TARGET_DELETE_SCOPE,
   DAILY_TARGET_READ_SCOPE,
+  DAILY_TARGET_UPDATE_SCOPE,
   FOOD_CREATE_SCOPE,
   FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
@@ -24,6 +27,9 @@ const TOOL_SCOPE = {
   update_vital: VITAL_UPDATE_SCOPE,
   delete_vital: VITAL_DELETE_SCOPE,
   read_daily_targets: DAILY_TARGET_READ_SCOPE,
+  create_daily_target: DAILY_TARGET_CREATE_SCOPE,
+  update_daily_target: DAILY_TARGET_UPDATE_SCOPE,
+  delete_daily_target: DAILY_TARGET_DELETE_SCOPE,
 } as const;
 
 export class UnknownProtectedToolError extends Error {
