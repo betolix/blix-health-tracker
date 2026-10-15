@@ -29,3 +29,15 @@ export function syntheticProbeOwnerFromVerifiedAuth0Subject(subject: unknown): s
   const cognitoSub = cognitoSubFromVerifiedAuth0Subject(subject);
   return `${cognitoSub}::${cognitoSub}`;
 }
+
+/**
+ * Resolve the Amplify owner representation confirmed by the existing
+ * owner-authorized OwnershipProbe model.
+ *
+ * The caller supplies only an already-verified Auth0 subject. Never accept
+ * an owner value from MCP arguments or other client-controlled input.
+ */
+export function amplifyOwnerFromVerifiedAuth0Subject(subject: unknown): string {
+  const cognitoSub = cognitoSubFromVerifiedAuth0Subject(subject);
+  return `${cognitoSub}::${cognitoSub}`;
+}
