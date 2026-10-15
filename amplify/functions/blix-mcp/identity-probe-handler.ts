@@ -271,6 +271,19 @@ export function createIdentityProbeHandler(
           requestAuth.requiredScope === FOOD_READ_SCOPE
         ) {
           ({ verifiedSubject } = await verifyFoodToken(token));
+        } else if (requestAuth.kind === 'discovery') {
+          try {
+            ({ fingerprint, verifiedSubject } = await verifyToken(token));
+          } catch (error) {
+            // Discovery is shared by tools protected by different scopes.
+            // Fall back to food:read only when the token was otherwise valid
+            // but lacked probe:identity. Never fall back on invalid JWTs.
+            if (!(error instanceof InsufficientProbeScopeError)) {
+              throw error;
+            }
+
+            ({ verifiedSubject } = await verifyFoodToken(token));
+          }
         } else {
           ({ fingerprint, verifiedSubject } = await verifyToken(token));
         }

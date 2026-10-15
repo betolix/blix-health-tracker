@@ -229,6 +229,30 @@ async function main() {
 
   resetCalls();
 
+  const probeDiscovery = await discovery(
+    'synthetic-probe-token',
+  );
+
+  assert.equal(probeDiscovery.statusCode, 200);
+  assert.equal(probeVerifierCalls, 1);
+  assert.equal(foodVerifierCalls, 0);
+  assert.equal(syntheticReaderCalls, 0);
+  console.log('PASS: probe:identity token can perform discovery');
+
+  resetCalls();
+
+  const foodDiscovery = await discovery(
+    'synthetic-food-token',
+  );
+
+  assert.equal(foodDiscovery.statusCode, 200);
+  assert.equal(probeVerifierCalls, 1);
+  assert.equal(foodVerifierCalls, 1);
+  assert.equal(syntheticReaderCalls, 0);
+  console.log('PASS: food:read token can perform discovery');
+
+  resetCalls();
+
   const invalidDiscovery = await discovery(
     'synthetic-invalid-token',
   );
