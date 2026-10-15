@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   DAILY_TARGET_READ_SCOPE,
+  FOOD_CREATE_SCOPE,
+  FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
+  FOOD_UPDATE_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
   InsufficientOAuthScopeError,
@@ -142,4 +145,64 @@ test('scope errors never expose granted scope contents', () => {
       return true;
     },
   );
+});
+
+
+test('FoodEntry write scopes are distinct least-privilege capabilities', () => {
+  assert.equal(FOOD_CREATE_SCOPE, 'food:create');
+  assert.equal(FOOD_UPDATE_SCOPE, 'food:update');
+  assert.equal(FOOD_DELETE_SCOPE, 'food:delete');
+
+  const scopes = [
+    PROBE_SCOPE,
+    FOOD_READ_SCOPE,
+    FOOD_CREATE_SCOPE,
+    FOOD_UPDATE_SCOPE,
+    FOOD_DELETE_SCOPE,
+    VITAL_READ_SCOPE,
+    DAILY_TARGET_READ_SCOPE,
+  ];
+
+  assert.equal(new Set(scopes).size, scopes.length);
+});
+
+test('FoodEntry write scopes cannot authorize one another', () => {
+  const writes = [
+    FOOD_CREATE_SCOPE,
+    FOOD_UPDATE_SCOPE,
+    FOOD_DELETE_SCOPE,
+  ];
+
+  for (const granted of writes) {
+    for (const required of writes) {
+      if (granted === required) {
+        assert.doesNotThrow(() =>
+          requireOAuthScope(granted, required)
+        );
+      } else {
+        assert.throws(
+          () => requireOAuthScope(granted, required),
+          InsufficientOAuthScopeError,
+        );
+      }
+    }
+  }
+});
+
+test('FoodEntry read scope cannot authorize writes and write scopes cannot authorize reads', () => {
+  for (const writeScope of [
+    FOOD_CREATE_SCOPE,
+    FOOD_UPDATE_SCOPE,
+    FOOD_DELETE_SCOPE,
+  ]) {
+    assert.throws(
+      () => requireOAuthScope(FOOD_READ_SCOPE, writeScope),
+      InsufficientOAuthScopeError,
+    );
+
+    assert.throws(
+      () => requireOAuthScope(writeScope, FOOD_READ_SCOPE),
+      InsufficientOAuthScopeError,
+    );
+  }
 });

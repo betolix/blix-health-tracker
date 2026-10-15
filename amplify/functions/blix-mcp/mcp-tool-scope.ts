@@ -1,6 +1,9 @@
 import {
   DAILY_TARGET_READ_SCOPE,
+  FOOD_CREATE_SCOPE,
+  FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
+  FOOD_UPDATE_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
 } from './oauth-scope.ts';
@@ -10,6 +13,9 @@ const TOOL_SCOPE = {
   ownership_probe: PROBE_SCOPE,
   food_entries_probe: PROBE_SCOPE,
   read_food_entries: FOOD_READ_SCOPE,
+  create_food_entry: FOOD_CREATE_SCOPE,
+  update_food_entry: FOOD_UPDATE_SCOPE,
+  delete_food_entry: FOOD_DELETE_SCOPE,
   read_vitals: VITAL_READ_SCOPE,
   read_daily_targets: DAILY_TARGET_READ_SCOPE,
 } as const;

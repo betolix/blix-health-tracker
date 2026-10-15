@@ -1,6 +1,9 @@
 import {
   DAILY_TARGET_READ_SCOPE,
+  FOOD_CREATE_SCOPE,
+  FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
+  FOOD_UPDATE_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
 } from './oauth-scope';
@@ -44,6 +47,9 @@ export const handler = async (event: LambdaEvent) => {
         scopes_supported: [
           PROBE_SCOPE,
           FOOD_READ_SCOPE,
+          FOOD_CREATE_SCOPE,
+          FOOD_UPDATE_SCOPE,
+          FOOD_DELETE_SCOPE,
           VITAL_READ_SCOPE,
           DAILY_TARGET_READ_SCOPE,
         ],

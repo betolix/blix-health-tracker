@@ -1,5 +1,8 @@
 export const PROBE_SCOPE = 'probe:identity';
 export const FOOD_READ_SCOPE = 'food:read';
+export const FOOD_CREATE_SCOPE = 'food:create';
+export const FOOD_UPDATE_SCOPE = 'food:update';
+export const FOOD_DELETE_SCOPE = 'food:delete';
 export const VITAL_READ_SCOPE = 'vitals:read';
 export const DAILY_TARGET_READ_SCOPE = 'targets:read';
 

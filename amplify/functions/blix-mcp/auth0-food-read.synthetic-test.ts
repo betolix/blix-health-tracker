@@ -7,13 +7,19 @@ import {
   MCP_RESOURCE,
   createIdentityProbeVerifier,
   verifyDailyTargetReadToken,
+  verifyFoodCreateToken,
+  verifyFoodDeleteToken,
   verifyFoodReadToken,
+  verifyFoodUpdateToken,
   verifyIdentityProbeToken,
   verifyVitalReadToken,
 } from './auth0-probe';
 import {
   DAILY_TARGET_READ_SCOPE,
+  FOOD_CREATE_SCOPE,
+  FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
+  FOOD_UPDATE_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
 } from './oauth-scope';
@@ -85,10 +91,22 @@ async function rejects(fn: () => Promise<unknown>) {
 
 const probeOnly = token(PROBE_SCOPE);
 const foodOnly = token(FOOD_READ_SCOPE);
+const foodCreateOnly = token(FOOD_CREATE_SCOPE);
+const foodUpdateOnly = token(FOOD_UPDATE_SCOPE);
+const foodDeleteOnly = token(FOOD_DELETE_SCOPE);
 const vitalOnly = token(VITAL_READ_SCOPE);
 const targetOnly = token(DAILY_TARGET_READ_SCOPE);
+
 const allScopes = token(
-  `${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE} ${DAILY_TARGET_READ_SCOPE}`
+  [
+    PROBE_SCOPE,
+    FOOD_READ_SCOPE,
+    FOOD_CREATE_SCOPE,
+    FOOD_UPDATE_SCOPE,
+    FOOD_DELETE_SCOPE,
+    VITAL_READ_SCOPE,
+    DAILY_TARGET_READ_SCOPE,
+  ].join(' ')
 );
 
 // probe:identity authorizes only the synthetic probe verifier.
@@ -145,9 +163,104 @@ await rejects(() =>
   verifyDailyTargetReadToken(vitalOnly, verifier)
 );
 
+// FoodEntry write capabilities are cryptographically verified and isolated.
+const createIdentity = await verifyFoodCreateToken(
+  foodCreateOnly,
+  verifier,
+);
+const updateIdentity = await verifyFoodUpdateToken(
+  foodUpdateOnly,
+  verifier,
+);
+const deleteIdentity = await verifyFoodDeleteToken(
+  foodDeleteOnly,
+  verifier,
+);
+
+for (const identity of [
+  createIdentity,
+  updateIdentity,
+  deleteIdentity,
+]) {
+  assert.equal(
+    identity.verifiedSubject,
+    'oidc|blix-cognito|11111111-1111-4111-8111-111111111111',
+  );
+}
+
+// Read cannot authorize writes.
+await rejects(() =>
+  verifyFoodCreateToken(foodOnly, verifier)
+);
+await rejects(() =>
+  verifyFoodUpdateToken(foodOnly, verifier)
+);
+await rejects(() =>
+  verifyFoodDeleteToken(foodOnly, verifier)
+);
+
+// Each write scope authorizes only its own operation.
+await rejects(() =>
+  verifyFoodUpdateToken(foodCreateOnly, verifier)
+);
+await rejects(() =>
+  verifyFoodDeleteToken(foodCreateOnly, verifier)
+);
+await rejects(() =>
+  verifyFoodCreateToken(foodUpdateOnly, verifier)
+);
+await rejects(() =>
+  verifyFoodDeleteToken(foodUpdateOnly, verifier)
+);
+await rejects(() =>
+  verifyFoodCreateToken(foodDeleteOnly, verifier)
+);
+await rejects(() =>
+  verifyFoodUpdateToken(foodDeleteOnly, verifier)
+);
+
+// Write scopes cannot authorize reads or probes.
+for (const writeOnly of [
+  foodCreateOnly,
+  foodUpdateOnly,
+  foodDeleteOnly,
+]) {
+  await rejects(() =>
+    verifyFoodReadToken(writeOnly, verifier)
+  );
+  await rejects(() =>
+    verifyIdentityProbeToken(writeOnly, verifier)
+  );
+}
+
+// Each write verifier still requires a cryptographically trusted JWT.
+await rejects(() =>
+  verifyFoodCreateToken(
+    token(FOOD_CREATE_SCOPE, {}, untrusted.privateKey),
+    verifier,
+  ),
+);
+
+await rejects(() =>
+  verifyFoodUpdateToken(
+    token(FOOD_UPDATE_SCOPE, {}, untrusted.privateKey),
+    verifier,
+  ),
+);
+
+await rejects(() =>
+  verifyFoodDeleteToken(
+    token(FOOD_DELETE_SCOPE, {}, untrusted.privateKey),
+    verifier,
+  ),
+);
+
 // A token explicitly granted all capabilities may satisfy all.
 await verifyIdentityProbeToken(allScopes, verifier);
 await verifyFoodReadToken(allScopes, verifier);
+await verifyFoodCreateToken(allScopes, verifier);
+await verifyFoodUpdateToken(allScopes, verifier);
+await verifyFoodDeleteToken(allScopes, verifier);
 await verifyVitalReadToken(allScopes, verifier);
 await verifyDailyTargetReadToken(allScopes, verifier);
 
@@ -186,6 +299,10 @@ console.log('PASS: food:read cannot authorize synthetic probes');
 console.log('PASS: food:read returns only verified server-side identity');
 console.log('PASS: vitals:read is isolated from probe and food scopes');
 console.log('PASS: targets:read is isolated from probe, food and vital scopes');
+console.log('PASS: food:create, food:update and food:delete are cryptographically verified');
+console.log('PASS: FoodEntry write scopes are mutually isolated');
+console.log('PASS: FoodEntry write scopes cannot authorize reads or probes');
+console.log('PASS: FoodEntry write verifiers reject untrusted signatures');
 console.log('PASS: explicitly combined scopes satisfy all verifiers');
 console.log('PASS: food:read rejects an untrusted signature');
 console.log('PASS: food:read rejects an unexpected issuer');

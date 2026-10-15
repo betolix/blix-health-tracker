@@ -6,7 +6,10 @@ import {
 } from './mcp-request-auth.ts';
 import {
   DAILY_TARGET_READ_SCOPE,
+  FOOD_CREATE_SCOPE,
+  FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
+  FOOD_UPDATE_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
 } from './oauth-scope.ts';
@@ -67,6 +70,24 @@ test('real FoodEntry read is classified as food:read', () => {
       requiredScope: FOOD_READ_SCOPE,
     },
   );
+});
+
+
+test('FoodEntry writes are classified with operation-specific scopes', () => {
+  for (const [toolName, requiredScope] of [
+    ['create_food_entry', FOOD_CREATE_SCOPE],
+    ['update_food_entry', FOOD_UPDATE_SCOPE],
+    ['delete_food_entry', FOOD_DELETE_SCOPE],
+  ] as const) {
+    assert.deepEqual(
+      classifyMcpRequestAuth(call(toolName)),
+      {
+        kind: 'protected-tool',
+        toolName,
+        requiredScope,
+      },
+    );
+  }
 });
 
 test('real Vital read is classified as vitals:read', () => {

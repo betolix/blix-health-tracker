@@ -16,13 +16,19 @@ import {
   MCP_RESOURCE,
   PROBE_SCOPE,
   verifyDailyTargetReadToken,
+  verifyFoodCreateToken,
+  verifyFoodDeleteToken,
   verifyFoodReadToken,
+  verifyFoodUpdateToken,
   verifyIdentityProbeToken,
   verifyVitalReadToken,
 } from './auth0-probe';
 import {
   DAILY_TARGET_READ_SCOPE,
+  FOOD_CREATE_SCOPE,
+  FOOD_DELETE_SCOPE,
   FOOD_READ_SCOPE,
+  FOOD_UPDATE_SCOPE,
   InsufficientOAuthScopeError,
   VITAL_READ_SCOPE,
 } from './oauth-scope';
@@ -47,6 +53,14 @@ import {
   readDailyTargets,
   type DailyTargetReadInput,
 } from './daily-target-reader';
+import {
+  createFoodEntry,
+  deleteFoodEntry,
+  updateFoodEntry,
+  type CreateFoodEntryInput,
+  type DeleteFoodEntryInput,
+  type UpdateFoodEntryInput,
+} from './food-entry-writer';
 
 // Deployed by resource.ts. The real FoodEntry tool remains fail-closed unless a reader is explicitly injected.
 type HttpEvent = {
@@ -184,6 +198,10 @@ type FoodVerifier = (
   token: string
 ) => Promise<{ verifiedSubject: string }>;
 
+type FoodWriteVerifier = (
+  token: string
+) => Promise<{ verifiedSubject: string }>;
+
 type VitalVerifier = (
   token: string
 ) => Promise<{ verifiedSubject: string }>;
@@ -195,6 +213,18 @@ type DailyTargetVerifier = (
 type RealFoodReader = (
   input: FoodEntryReadInput,
 ) => ReturnType<typeof readFoodEntries>;
+
+type RealFoodCreator = (
+  input: CreateFoodEntryInput,
+) => ReturnType<typeof createFoodEntry>;
+
+type RealFoodUpdater = (
+  input: UpdateFoodEntryInput,
+) => ReturnType<typeof updateFoodEntry>;
+
+type RealFoodDeleter = (
+  input: DeleteFoodEntryInput,
+) => ReturnType<typeof deleteFoodEntry>;
 
 type RealVitalReader = (
   input: VitalReadInput,
@@ -211,6 +241,22 @@ const productionFoodReader: RealFoodReader = (input) =>
     tableName: process.env.FOOD_ENTRY_TABLE_NAME ?? '',
     send: (command) => dynamoDb.send(command),
   });
+
+const productionFoodWriterDependencies = {
+  tableName: process.env.FOOD_ENTRY_TABLE_NAME ?? '',
+  put: (command: any) => dynamoDb.send(command),
+  update: (command: any) => dynamoDb.send(command),
+  delete: (command: any) => dynamoDb.send(command),
+};
+
+const productionFoodCreator: RealFoodCreator = (input) =>
+  createFoodEntry(input, productionFoodWriterDependencies);
+
+const productionFoodUpdater: RealFoodUpdater = (input) =>
+  updateFoodEntry(input, productionFoodWriterDependencies);
+
+const productionFoodDeleter: RealFoodDeleter = (input) =>
+  deleteFoodEntry(input, productionFoodWriterDependencies);
 
 const productionVitalReader: RealVitalReader = (input) =>
   readVitals(input, {
@@ -233,6 +279,12 @@ export function createIdentityProbeHandler(
   readRealVitals?: RealVitalReader,
   verifyDailyTargetToken: DailyTargetVerifier = verifyDailyTargetReadToken,
   readRealDailyTargets?: RealDailyTargetReader,
+  verifyFoodCreate: FoodWriteVerifier = verifyFoodCreateToken,
+  createRealFood?: RealFoodCreator,
+  verifyFoodUpdate: FoodWriteVerifier = verifyFoodUpdateToken,
+  updateRealFood?: RealFoodUpdater,
+  verifyFoodDelete: FoodWriteVerifier = verifyFoodDeleteToken,
+  deleteRealFood?: RealFoodDeleter,
 ) {
   return async (event: HttpEvent) => {
     const method = event.requestContext?.http?.method;
@@ -336,6 +388,21 @@ export function createIdentityProbeHandler(
           ({ verifiedSubject } = await verifyFoodToken(token));
         } else if (
           requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === FOOD_CREATE_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyFoodCreate(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === FOOD_UPDATE_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyFoodUpdate(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === FOOD_DELETE_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyFoodDelete(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
           requestAuth.requiredScope === VITAL_READ_SCOPE
         ) {
           ({ verifiedSubject } = await verifyVitalToken(token));
@@ -363,13 +430,37 @@ export function createIdentityProbeHandler(
               }
 
               try {
-                ({ verifiedSubject } = await verifyVitalToken(token));
+                ({ verifiedSubject } = await verifyFoodCreate(token));
+              } catch (createError) {
+                if (!(createError instanceof InsufficientOAuthScopeError)) {
+                  throw createError;
+                }
+
+                try {
+                  ({ verifiedSubject } = await verifyFoodUpdate(token));
+                } catch (updateError) {
+                  if (!(updateError instanceof InsufficientOAuthScopeError)) {
+                    throw updateError;
+                  }
+
+                  try {
+                    ({ verifiedSubject } = await verifyFoodDelete(token));
+                  } catch (deleteError) {
+                    if (!(deleteError instanceof InsufficientOAuthScopeError)) {
+                      throw deleteError;
+                    }
+
+                    try {
+                      ({ verifiedSubject } = await verifyVitalToken(token));
               } catch (vitalError) {
                 if (!(vitalError instanceof InsufficientOAuthScopeError)) {
                   throw vitalError;
                 }
 
-                ({ verifiedSubject } = await verifyDailyTargetToken(token));
+                      ({ verifiedSubject } = await verifyDailyTargetToken(token));
+                    }
+                  }
+                }
               }
             }
           }
@@ -412,6 +503,9 @@ export function createIdentityProbeHandler(
         readRealFood,
         readRealVitals,
         readRealDailyTargets,
+        createRealFood,
+        updateRealFood,
+        deleteRealFood,
       ),
       { responseMode: 'json' }
     );
@@ -457,4 +551,10 @@ export const handler = createIdentityProbeHandler(
   productionVitalReader,
   verifyDailyTargetReadToken,
   productionDailyTargetReader,
+  verifyFoodCreateToken,
+  productionFoodCreator,
+  verifyFoodUpdateToken,
+  productionFoodUpdater,
+  verifyFoodDeleteToken,
+  productionFoodDeleter,
 );
