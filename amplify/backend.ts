@@ -18,6 +18,14 @@ const backend = defineBackend({
   blixMcp,
 });
 
+// Protect the real FoodEntry table before introducing its owner/date GSI.
+const foodEntryCfnTable =
+  backend.data.resources.cfnResources.amplifyDynamoDbTables['FoodEntry'];
+
+foodEntryCfnTable.pointInTimeRecoveryEnabled = true;
+foodEntryCfnTable.deletionProtectionEnabled = true;
+foodEntryCfnTable.applyRemovalPolicy(RemovalPolicy.RETAIN);
+
 backend.blixMcp.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
