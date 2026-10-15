@@ -7,6 +7,7 @@ import {
 import {
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
+  VITAL_READ_SCOPE,
 } from './oauth-scope.ts';
 
 test('each synthetic probe requires only probe:identity', () => {
@@ -29,6 +30,13 @@ test('real FoodEntry read requires only food:read', () => {
   );
 });
 
+test('real Vital read requires only vitals:read', () => {
+  assert.equal(
+    requiredOAuthScopeForTool('read_vitals'),
+    VITAL_READ_SCOPE,
+  );
+});
+
 test('probe tool names can never select food:read', () => {
   for (const tool of [
     'identity_probe',
@@ -40,6 +48,17 @@ test('probe tool names can never select food:read', () => {
       FOOD_READ_SCOPE,
     );
   }
+});
+
+test('real Vital read cannot fall back to probe or food scope', () => {
+  assert.notEqual(
+    requiredOAuthScopeForTool('read_vitals'),
+    PROBE_SCOPE,
+  );
+  assert.notEqual(
+    requiredOAuthScopeForTool('read_vitals'),
+    FOOD_READ_SCOPE,
+  );
 });
 
 test('real FoodEntry read can never fall back to probe:identity', () => {
@@ -72,7 +91,8 @@ test('caller-controlled scope strings are not interpreted as tool names', () => 
   for (const supplied of [
     PROBE_SCOPE,
     FOOD_READ_SCOPE,
-    `${PROBE_SCOPE} ${FOOD_READ_SCOPE}`,
+    VITAL_READ_SCOPE,
+    `${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE}`,
   ]) {
     assert.throws(
       () => requiredOAuthScopeForTool(supplied),

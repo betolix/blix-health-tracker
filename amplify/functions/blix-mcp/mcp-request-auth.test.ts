@@ -7,6 +7,7 @@ import {
 import {
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
+  VITAL_READ_SCOPE,
 } from './oauth-scope.ts';
 
 function call(name: unknown): string {
@@ -67,9 +68,19 @@ test('real FoodEntry read is classified as food:read', () => {
   );
 });
 
+test('real Vital read is classified as vitals:read', () => {
+  assert.deepEqual(
+    classifyMcpRequestAuth(call('read_vitals')),
+    {
+      kind: 'protected-tool',
+      toolName: 'read_vitals',
+      requiredScope: VITAL_READ_SCOPE,
+    },
+  );
+});
+
 test('unknown protected tools fail closed instead of receiving a fallback scope', () => {
   for (const name of [
-    'read_vitals',
     'read_daily_targets',
     'health_read',
     '',

@@ -1,6 +1,7 @@
 import {
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
+  VITAL_READ_SCOPE,
 } from './oauth-scope.ts';
 
 const TOOL_SCOPE = {
@@ -8,6 +9,7 @@ const TOOL_SCOPE = {
   ownership_probe: PROBE_SCOPE,
   food_entries_probe: PROBE_SCOPE,
   read_food_entries: FOOD_READ_SCOPE,
+  read_vitals: VITAL_READ_SCOPE,
 } as const;
 
 export class UnknownProtectedToolError extends Error {

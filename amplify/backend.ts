@@ -1,4 +1,5 @@
 import { foodEntryReadPolicy } from './functions/blix-mcp/food-entry-read-policy';
+import { vitalReadPolicy } from './functions/blix-mcp/vital-read-policy';
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { AttributeType, BillingMode, ProjectionType, Table } from 'aws-cdk-lib/aws-dynamodb';
@@ -44,6 +45,17 @@ backend.blixMcp.resources.lambda.addToRolePolicy(
 backend.blixMcp.resources.lambda.addEnvironment(
   'FOOD_ENTRY_TABLE_NAME',
   foodEntryTable.tableName,
+);
+
+const vitalTable = backend.data.resources.tables['Vital'];
+
+backend.blixMcp.resources.lambda.addToRolePolicy(
+  vitalReadPolicy(vitalTable.tableArn),
+);
+
+backend.blixMcp.resources.lambda.addEnvironment(
+  'VITAL_TABLE_NAME',
+  vitalTable.tableName,
 );
 
 backend.blixMcp.resources.lambda.addFunctionUrl({

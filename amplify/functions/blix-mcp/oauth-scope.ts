@@ -1,5 +1,6 @@
 export const PROBE_SCOPE = 'probe:identity';
 export const FOOD_READ_SCOPE = 'food:read';
+export const VITAL_READ_SCOPE = 'vitals:read';
 
 export class InsufficientOAuthScopeError extends Error {
   constructor() {

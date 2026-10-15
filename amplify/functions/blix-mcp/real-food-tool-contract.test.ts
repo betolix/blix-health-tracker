@@ -53,6 +53,7 @@ test('tools/list exposes real FoodEntry read with food-only OAuth metadata', asy
         'ownership_probe',
         'food_entries_probe',
         'read_food_entries',
+        'read_vitals',
       ],
     );
 
