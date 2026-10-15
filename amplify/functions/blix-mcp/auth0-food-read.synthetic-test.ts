@@ -6,11 +6,13 @@ import {
   CHATGPT_CIMD_CLIENT_ID,
   MCP_RESOURCE,
   createIdentityProbeVerifier,
+  verifyDailyTargetReadToken,
   verifyFoodReadToken,
   verifyIdentityProbeToken,
   verifyVitalReadToken,
 } from './auth0-probe';
 import {
+  DAILY_TARGET_READ_SCOPE,
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
@@ -84,8 +86,9 @@ async function rejects(fn: () => Promise<unknown>) {
 const probeOnly = token(PROBE_SCOPE);
 const foodOnly = token(FOOD_READ_SCOPE);
 const vitalOnly = token(VITAL_READ_SCOPE);
+const targetOnly = token(DAILY_TARGET_READ_SCOPE);
 const allScopes = token(
-  `${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE}`
+  `${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE} ${DAILY_TARGET_READ_SCOPE}`
 );
 
 // probe:identity authorizes only the synthetic probe verifier.
@@ -112,10 +115,41 @@ await rejects(() => verifyIdentityProbeToken(vitalOnly, verifier));
 await rejects(() => verifyVitalReadToken(foodOnly, verifier));
 await rejects(() => verifyVitalReadToken(probeOnly, verifier));
 
+// targets:read authorizes only the DailyTarget verifier.
+const targetIdentity = await verifyDailyTargetReadToken(
+  targetOnly,
+  verifier,
+);
+assert.equal(
+  targetIdentity.verifiedSubject,
+  'oidc|blix-cognito|11111111-1111-4111-8111-111111111111',
+);
+
+await rejects(() =>
+  verifyIdentityProbeToken(targetOnly, verifier)
+);
+await rejects(() =>
+  verifyFoodReadToken(targetOnly, verifier)
+);
+await rejects(() =>
+  verifyVitalReadToken(targetOnly, verifier)
+);
+
+await rejects(() =>
+  verifyDailyTargetReadToken(probeOnly, verifier)
+);
+await rejects(() =>
+  verifyDailyTargetReadToken(foodOnly, verifier)
+);
+await rejects(() =>
+  verifyDailyTargetReadToken(vitalOnly, verifier)
+);
+
 // A token explicitly granted all capabilities may satisfy all.
 await verifyIdentityProbeToken(allScopes, verifier);
 await verifyFoodReadToken(allScopes, verifier);
 await verifyVitalReadToken(allScopes, verifier);
+await verifyDailyTargetReadToken(allScopes, verifier);
 
 // food:read is not sufficient unless the JWT itself is cryptographically
 // valid and bound to the expected issuer, audience, and OAuth client.
@@ -151,6 +185,7 @@ console.log('PASS: probe:identity cannot authorize FoodEntry reads');
 console.log('PASS: food:read cannot authorize synthetic probes');
 console.log('PASS: food:read returns only verified server-side identity');
 console.log('PASS: vitals:read is isolated from probe and food scopes');
+console.log('PASS: targets:read is isolated from probe, food and vital scopes');
 console.log('PASS: explicitly combined scopes satisfy all verifiers');
 console.log('PASS: food:read rejects an untrusted signature');
 console.log('PASS: food:read rejects an unexpected issuer');

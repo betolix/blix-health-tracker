@@ -1,4 +1,5 @@
 import {
+  DAILY_TARGET_READ_SCOPE,
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
@@ -44,6 +45,7 @@ export const handler = async (event: LambdaEvent) => {
           PROBE_SCOPE,
           FOOD_READ_SCOPE,
           VITAL_READ_SCOPE,
+          DAILY_TARGET_READ_SCOPE,
         ],
       }),
     };

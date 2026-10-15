@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { JwtVerifier } from 'aws-jwt-verify';
 import type { JwksCache } from 'aws-jwt-verify/jwk';
 import {
+  DAILY_TARGET_READ_SCOPE,
   FOOD_READ_SCOPE,
   InsufficientOAuthScopeError,
   PROBE_SCOPE,
@@ -113,6 +114,22 @@ export async function verifyVitalReadToken(
   const payload = await tokenVerifier.verify(token);
 
   requireOAuthScope(payload.scope, VITAL_READ_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
+}
+
+export async function verifyDailyTargetReadToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, DAILY_TARGET_READ_SCOPE);
 
   const verifiedSubject = payload.sub;
   if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {

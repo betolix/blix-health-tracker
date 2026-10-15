@@ -15,11 +15,13 @@ import {
   InsufficientProbeScopeError,
   MCP_RESOURCE,
   PROBE_SCOPE,
+  verifyDailyTargetReadToken,
   verifyFoodReadToken,
   verifyIdentityProbeToken,
   verifyVitalReadToken,
 } from './auth0-probe';
 import {
+  DAILY_TARGET_READ_SCOPE,
   FOOD_READ_SCOPE,
   InsufficientOAuthScopeError,
   VITAL_READ_SCOPE,
@@ -41,6 +43,10 @@ import {
   readVitals,
   type VitalReadInput,
 } from './vital-reader';
+import {
+  readDailyTargets,
+  type DailyTargetReadInput,
+} from './daily-target-reader';
 
 // Deployed by resource.ts. The real FoodEntry tool remains fail-closed unless a reader is explicitly injected.
 type HttpEvent = {
@@ -182,6 +188,10 @@ type VitalVerifier = (
   token: string
 ) => Promise<{ verifiedSubject: string }>;
 
+type DailyTargetVerifier = (
+  token: string
+) => Promise<{ verifiedSubject: string }>;
+
 type RealFoodReader = (
   input: FoodEntryReadInput,
 ) => ReturnType<typeof readFoodEntries>;
@@ -189,6 +199,10 @@ type RealFoodReader = (
 type RealVitalReader = (
   input: VitalReadInput,
 ) => ReturnType<typeof readVitals>;
+
+type RealDailyTargetReader = (
+  input: DailyTargetReadInput,
+) => ReturnType<typeof readDailyTargets>;
 
 const dynamoDb = new DynamoDBClient({});
 
@@ -204,6 +218,12 @@ const productionVitalReader: RealVitalReader = (input) =>
     send: (command) => dynamoDb.send(command),
   });
 
+const productionDailyTargetReader: RealDailyTargetReader = (input) =>
+  readDailyTargets(input, {
+    tableName: process.env.DAILY_TARGET_TABLE_NAME ?? '',
+    send: (command) => dynamoDb.send(command),
+  });
+
 export function createIdentityProbeHandler(
   verifyToken: ProbeVerifier = verifyIdentityProbeToken,
   readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
@@ -211,6 +231,8 @@ export function createIdentityProbeHandler(
   readRealFood?: RealFoodReader,
   verifyVitalToken: VitalVerifier = verifyVitalReadToken,
   readRealVitals?: RealVitalReader,
+  verifyDailyTargetToken: DailyTargetVerifier = verifyDailyTargetReadToken,
+  readRealDailyTargets?: RealDailyTargetReader,
 ) {
   return async (event: HttpEvent) => {
     const method = event.requestContext?.http?.method;
@@ -317,6 +339,11 @@ export function createIdentityProbeHandler(
           requestAuth.requiredScope === VITAL_READ_SCOPE
         ) {
           ({ verifiedSubject } = await verifyVitalToken(token));
+        } else if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === DAILY_TARGET_READ_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyDailyTargetToken(token));
         } else if (requestAuth.kind === 'discovery') {
           try {
             ({ fingerprint, verifiedSubject } = await verifyToken(token));
@@ -335,7 +362,15 @@ export function createIdentityProbeHandler(
                 throw foodError;
               }
 
-              ({ verifiedSubject } = await verifyVitalToken(token));
+              try {
+                ({ verifiedSubject } = await verifyVitalToken(token));
+              } catch (vitalError) {
+                if (!(vitalError instanceof InsufficientOAuthScopeError)) {
+                  throw vitalError;
+                }
+
+                ({ verifiedSubject } = await verifyDailyTargetToken(token));
+              }
             }
           }
         } else {
@@ -376,6 +411,7 @@ export function createIdentityProbeHandler(
         readSyntheticFood,
         readRealFood,
         readRealVitals,
+        readRealDailyTargets,
       ),
       { responseMode: 'json' }
     );
@@ -419,4 +455,6 @@ export const handler = createIdentityProbeHandler(
   productionFoodReader,
   verifyVitalReadToken,
   productionVitalReader,
+  verifyDailyTargetReadToken,
+  productionDailyTargetReader,
 );

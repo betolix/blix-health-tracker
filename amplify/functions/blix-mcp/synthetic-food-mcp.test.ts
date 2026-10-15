@@ -94,6 +94,7 @@ test('tools/list preserves synthetic probes and exposes only the gated real food
     'food_entries_probe',
     'read_food_entries',
     'read_vitals',
+    'read_daily_targets',
   ]);
 
   const food = tools.find((x: any) => x.name === 'food_entries_probe');

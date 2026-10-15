@@ -1,4 +1,5 @@
 import {
+  DAILY_TARGET_READ_SCOPE,
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
@@ -10,6 +11,7 @@ const TOOL_SCOPE = {
   food_entries_probe: PROBE_SCOPE,
   read_food_entries: FOOD_READ_SCOPE,
   read_vitals: VITAL_READ_SCOPE,
+  read_daily_targets: DAILY_TARGET_READ_SCOPE,
 } as const;
 
 export class UnknownProtectedToolError extends Error {

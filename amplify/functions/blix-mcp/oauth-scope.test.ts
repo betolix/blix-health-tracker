@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  DAILY_TARGET_READ_SCOPE,
   FOOD_READ_SCOPE,
   PROBE_SCOPE,
   VITAL_READ_SCOPE,
@@ -12,9 +13,13 @@ test('probe and FoodEntry scopes are distinct least-privilege capabilities', () 
   assert.equal(PROBE_SCOPE, 'probe:identity');
   assert.equal(FOOD_READ_SCOPE, 'food:read');
   assert.equal(VITAL_READ_SCOPE, 'vitals:read');
+  assert.equal(DAILY_TARGET_READ_SCOPE, 'targets:read');
   assert.notEqual(PROBE_SCOPE, FOOD_READ_SCOPE);
   assert.notEqual(PROBE_SCOPE, VITAL_READ_SCOPE);
   assert.notEqual(FOOD_READ_SCOPE, VITAL_READ_SCOPE);
+  assert.notEqual(PROBE_SCOPE, DAILY_TARGET_READ_SCOPE);
+  assert.notEqual(FOOD_READ_SCOPE, DAILY_TARGET_READ_SCOPE);
+  assert.notEqual(VITAL_READ_SCOPE, DAILY_TARGET_READ_SCOPE);
 });
 
 test('probe-only scope cannot authorize a real FoodEntry read', () => {
@@ -38,6 +43,32 @@ test('food-only scope cannot authorize Vital reads', () => {
   );
 });
 
+test('other scopes cannot authorize DailyTarget reads', () => {
+  for (const granted of [
+    PROBE_SCOPE,
+    FOOD_READ_SCOPE,
+    VITAL_READ_SCOPE,
+  ]) {
+    assert.throws(
+      () => requireOAuthScope(granted, DAILY_TARGET_READ_SCOPE),
+      InsufficientOAuthScopeError,
+    );
+  }
+});
+
+test('targets-only scope cannot authorize other real reads', () => {
+  for (const required of [
+    FOOD_READ_SCOPE,
+    VITAL_READ_SCOPE,
+    PROBE_SCOPE,
+  ]) {
+    assert.throws(
+      () => requireOAuthScope(DAILY_TARGET_READ_SCOPE, required),
+      InsufficientOAuthScopeError,
+    );
+  }
+});
+
 test('food-only scope cannot authorize synthetic identity probes', () => {
   assert.throws(
     () => requireOAuthScope(FOOD_READ_SCOPE, PROBE_SCOPE),
@@ -57,11 +88,15 @@ test('the exact required scope is accepted', () => {
   assert.doesNotThrow(() =>
     requireOAuthScope(VITAL_READ_SCOPE, VITAL_READ_SCOPE),
   );
+
+  assert.doesNotThrow(() =>
+    requireOAuthScope(DAILY_TARGET_READ_SCOPE, DAILY_TARGET_READ_SCOPE),
+  );
 });
 
 test('multiple OAuth scopes are parsed as space-delimited capabilities', () => {
   const granted =
-    `openid ${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE}`;
+    `openid ${PROBE_SCOPE} ${FOOD_READ_SCOPE} ${VITAL_READ_SCOPE} ${DAILY_TARGET_READ_SCOPE}`;
 
   assert.doesNotThrow(() =>
     requireOAuthScope(granted, PROBE_SCOPE),
@@ -73,6 +108,10 @@ test('multiple OAuth scopes are parsed as space-delimited capabilities', () => {
 
   assert.doesNotThrow(() =>
     requireOAuthScope(granted, VITAL_READ_SCOPE),
+  );
+
+  assert.doesNotThrow(() =>
+    requireOAuthScope(granted, DAILY_TARGET_READ_SCOPE),
   );
 });
 
