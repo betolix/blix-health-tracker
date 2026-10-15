@@ -1,13 +1,20 @@
 import { createHash } from 'node:crypto';
 import { JwtVerifier } from 'aws-jwt-verify';
 import type { JwksCache } from 'aws-jwt-verify/jwk';
+import {
+  FOOD_READ_SCOPE,
+  InsufficientOAuthScopeError,
+  PROBE_SCOPE,
+  requireOAuthScope,
+} from './oauth-scope';
+
+export { PROBE_SCOPE } from './oauth-scope';
 
 // These values must exactly match Auth0 discovery and the protected resource.
 export const AUTH0_ISSUER =
   'https://dev-0nvmmicnskv1kx50.us.auth0.com/';
 export const MCP_RESOURCE =
   'https://xa2eims733qub3334xn6yky7re0ytosu.lambda-url.us-east-1.on.aws/';
-export const PROBE_SCOPE = 'probe:identity';
 export const CHATGPT_CIMD_CLIENT_ID =
   'https://chatgpt.com/oauth/client.json';
 
@@ -58,10 +65,13 @@ export async function verifyIdentityProbeToken(
   // This verifier is intentionally separate from the old Cognito verifier.
   // It validates Auth0-issued API access tokens, not ID tokens.
   const payload = await tokenVerifier.verify(token);
-  const grantedScopes =
-    typeof payload.scope === 'string' ? payload.scope.split(/\s+/) : [];
-  if (!grantedScopes.includes(PROBE_SCOPE)) {
-    throw new InsufficientProbeScopeError();
+  try {
+    requireOAuthScope(payload.scope, PROBE_SCOPE);
+  } catch (error) {
+    if (error instanceof InsufficientOAuthScopeError) {
+      throw new InsufficientProbeScopeError();
+    }
+    throw error;
   }
 
   // Opaque, stable probe identifier: do not expose email, JWT or raw sub.
@@ -76,4 +86,20 @@ export async function verifyIdentityProbeToken(
     .slice(0, 24);
 
   return { fingerprint, verifiedSubject };
+}
+
+export async function verifyFoodReadToken(
+  token: string,
+  tokenVerifier = verifier
+) {
+  const payload = await tokenVerifier.verify(token);
+
+  requireOAuthScope(payload.scope, FOOD_READ_SCOPE);
+
+  const verifiedSubject = payload.sub;
+  if (typeof verifiedSubject !== 'string' || !verifiedSubject.trim()) {
+    throw new Error('Missing authenticated subject');
+  }
+
+  return { verifiedSubject };
 }
