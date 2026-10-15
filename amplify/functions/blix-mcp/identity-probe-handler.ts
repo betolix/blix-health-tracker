@@ -30,6 +30,12 @@ import { handler as disabledHandler } from './disabled-handler';
 import { createIdentityProbeServer } from './identity-probe-server';
 import { listSyntheticFoodEntries } from './synthetic-food-entry-probe';
 
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  readFoodEntries,
+  type FoodEntryReadInput,
+} from './food-entry-reader';
+
 // Deployed by resource.ts. The real FoodEntry tool remains fail-closed unless a reader is explicitly injected.
 type HttpEvent = {
   rawPath?: string;
@@ -166,10 +172,23 @@ type FoodVerifier = (
   token: string
 ) => Promise<{ verifiedSubject: string }>;
 
+type RealFoodReader = (
+  input: FoodEntryReadInput,
+) => ReturnType<typeof readFoodEntries>;
+
+const dynamoDb = new DynamoDBClient({});
+
+const productionFoodReader: RealFoodReader = (input) =>
+  readFoodEntries(input, {
+    tableName: process.env.FOOD_ENTRY_TABLE_NAME ?? '',
+    send: (command) => dynamoDb.send(command),
+  });
+
 export function createIdentityProbeHandler(
   verifyToken: ProbeVerifier = verifyIdentityProbeToken,
   readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
   verifyFoodToken: FoodVerifier = verifyFoodReadToken,
+  readRealFood?: RealFoodReader,
 ) {
   return async (event: HttpEvent) => {
     const method = event.requestContext?.http?.method;
@@ -316,7 +335,12 @@ export function createIdentityProbeHandler(
     // MCP v2 serves both the 2026 discovery protocol and legacy clients.
     // A fresh server is constructed for this request only.
     const mcp = createMcpHandler(
-      () => createIdentityProbeServer(fingerprint, verifiedSubject, readSyntheticFood),
+      () => createIdentityProbeServer(
+        fingerprint,
+        verifiedSubject,
+        readSyntheticFood,
+        readRealFood,
+      ),
       { responseMode: 'json' }
     );
 
@@ -352,4 +376,9 @@ export function createIdentityProbeHandler(
   };
 }
 
-export const handler = createIdentityProbeHandler();
+export const handler = createIdentityProbeHandler(
+  verifyIdentityProbeToken,
+  listSyntheticFoodEntries,
+  verifyFoodReadToken,
+  productionFoodReader,
+);
