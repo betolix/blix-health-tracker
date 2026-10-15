@@ -26,6 +26,12 @@ const schema = a.schema({
         allow.owner().to(['read', 'delete']),
       ]),
     })
+    .secondaryIndexes((index) => [
+      index('owner')
+        .sortKeys(['date'])
+        .name('byOwnerAndDate')
+        .projection('INCLUDE', ['name', 'calories']),
+    ])
     .authorization((allow) => [
       allow.owner(),
     ]),
