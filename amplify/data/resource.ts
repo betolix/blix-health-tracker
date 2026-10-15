@@ -51,6 +51,12 @@ const schema = a.schema({
         allow.owner().to(['read', 'delete']),
       ]),
     })
+    .secondaryIndexes((index) => [
+      index('owner')
+        .sortKeys(['recordedAt'])
+        .name('byOwnerAndRecordedAt')
+        .projection('INCLUDE', ['weightKg', 'systolic', 'diastolic']),
+    ])
     .authorization((allow) => [
       allow.owner(),
     ]),
