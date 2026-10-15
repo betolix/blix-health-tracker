@@ -1,3 +1,4 @@
+import { foodEntryReadPolicy } from './functions/blix-mcp/food-entry-read-policy';
 import { FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { AttributeType, BillingMode, ProjectionType, Table } from 'aws-cdk-lib/aws-dynamodb';
@@ -26,12 +27,22 @@ foodEntryCfnTable.pointInTimeRecoveryEnabled = true;
 foodEntryCfnTable.deletionProtectionEnabled = true;
 foodEntryCfnTable.applyRemovalPolicy(RemovalPolicy.RETAIN);
 
+const foodEntryTable = backend.data.resources.tables['FoodEntry'];
+
+backend.blixMcp.resources.lambda.addToRolePolicy(
+  foodEntryReadPolicy(foodEntryTable.tableArn),
+);
+
+backend.blixMcp.resources.lambda.addEnvironment(
+  'FOOD_ENTRY_TABLE_NAME',
+  foodEntryTable.tableName,
+);
+
 backend.blixMcp.resources.lambda.addFunctionUrl({
   authType: FunctionUrlAuthType.NONE,
 });
 
-// Synthetic-only probe: this Lambda gets Scan on OwnershipProbe, and no
-// permissions to the FoodEntry, Vital, or DailyTarget DynamoDB tables.
+// Synthetic ownership probe: Scan is restricted to OwnershipProbe.
 const ownershipProbeTable = backend.data.resources.tables['OwnershipProbe'];
 backend.blixMcp.resources.lambda.addToRolePolicy(new PolicyStatement({
   actions: ['dynamodb:Scan'],

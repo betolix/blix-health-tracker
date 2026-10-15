@@ -15,13 +15,28 @@ import {
   InsufficientProbeScopeError,
   MCP_RESOURCE,
   PROBE_SCOPE,
+  verifyFoodReadToken,
   verifyIdentityProbeToken,
 } from './auth0-probe';
+import {
+  FOOD_READ_SCOPE,
+  InsufficientOAuthScopeError,
+} from './oauth-scope';
+import {
+  classifyMcpRequestAuth,
+  InvalidProtectedMcpRequestError,
+} from './mcp-request-auth';
 import { handler as disabledHandler } from './disabled-handler';
 import { createIdentityProbeServer } from './identity-probe-server';
 import { listSyntheticFoodEntries } from './synthetic-food-entry-probe';
 
-// Deployed by resource.ts. This handler exposes only the synthetic identity probe.
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  readFoodEntries,
+  type FoodEntryReadInput,
+} from './food-entry-reader';
+
+// Deployed by resource.ts. The real FoodEntry tool remains fail-closed unless a reader is explicitly injected.
 type HttpEvent = {
   rawPath?: string;
   body?: string | null;
@@ -31,7 +46,10 @@ type HttpEvent = {
 };
 
 function classifyAuthFailure(error: unknown): string {
-  if (error instanceof InsufficientProbeScopeError) return 'scope';
+  if (
+    error instanceof InsufficientProbeScopeError ||
+    error instanceof InsufficientOAuthScopeError
+  ) return 'scope';
   if (error instanceof JwtInvalidAudienceError) return 'audience';
   if (error instanceof JwtInvalidIssuerError) return 'issuer';
   if (error instanceof JwtExpiredError) return 'expired';
@@ -72,7 +90,11 @@ function safeDiagnosticLog(details: {
 
 const RESOURCE_METADATA = `${MCP_RESOURCE}.well-known/oauth-protected-resource`;
 
-function errorResponse(statusCode: number, error: string) {
+function errorResponse(
+  statusCode: number,
+  error: string,
+  requiredScope: string = PROBE_SCOPE,
+) {
   safeDiagnosticLog({
     stage: 'auth-error-response',
     status: statusCode,
@@ -84,7 +106,7 @@ function errorResponse(statusCode: number, error: string) {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
       'WWW-Authenticate':
-        `Bearer resource_metadata="${RESOURCE_METADATA}", scope="${PROBE_SCOPE}"` +
+        `Bearer resource_metadata="${RESOURCE_METADATA}", scope="${requiredScope}"` +
         (statusCode === 403 ? ', error="insufficient_scope"' : ''),
     },
     body: JSON.stringify({ error }),
@@ -146,9 +168,27 @@ type ProbeVerifier = (
   token: string
 ) => Promise<{ fingerprint: string; verifiedSubject: string }>;
 
+type FoodVerifier = (
+  token: string
+) => Promise<{ verifiedSubject: string }>;
+
+type RealFoodReader = (
+  input: FoodEntryReadInput,
+) => ReturnType<typeof readFoodEntries>;
+
+const dynamoDb = new DynamoDBClient({});
+
+const productionFoodReader: RealFoodReader = (input) =>
+  readFoodEntries(input, {
+    tableName: process.env.FOOD_ENTRY_TABLE_NAME ?? '',
+    send: (command) => dynamoDb.send(command),
+  });
+
 export function createIdentityProbeHandler(
   verifyToken: ProbeVerifier = verifyIdentityProbeToken,
   readSyntheticFood: typeof listSyntheticFoodEntries = listSyntheticFoodEntries,
+  verifyFoodToken: FoodVerifier = verifyFoodReadToken,
+  readRealFood?: RealFoodReader,
 ) {
   return async (event: HttpEvent) => {
     const method = event.requestContext?.http?.method;
@@ -183,6 +223,21 @@ export function createIdentityProbeHandler(
         ? Buffer.from(event.body, 'base64').toString('utf8')
         : event.body;
     const anonymousOperation = anonymousMcpOperation(body);
+
+    let requestAuth: ReturnType<typeof classifyMcpRequestAuth> | undefined;
+    try {
+      requestAuth = classifyMcpRequestAuth(body);
+    } catch (error) {
+      if (!(error instanceof InvalidProtectedMcpRequestError)) {
+        throw error;
+      }
+    }
+
+    const requiredScope =
+      requestAuth?.kind === 'protected-tool'
+        ? requestAuth.requiredScope
+        : PROBE_SCOPE;
+
     let rpcMethod: string | undefined;
     try {
       const rpc: unknown = body ? JSON.parse(body) : undefined;
@@ -220,31 +275,72 @@ export function createIdentityProbeHandler(
           authFailure: 'bearer-format',
           status: 401,
         });
-        return errorResponse(401, 'unauthorized');
+        return errorResponse(401, 'unauthorized', requiredScope);
       }
+
+      // Unknown or malformed protected operations never receive a fallback
+      // verifier merely because the caller supplied Authorization.
+      if (!requestAuth) {
+        return errorResponse(401, 'unauthorized', requiredScope);
+      }
+
       try {
-        ({ fingerprint, verifiedSubject } = await verifyToken(token));
+        if (
+          requestAuth.kind === 'protected-tool' &&
+          requestAuth.requiredScope === FOOD_READ_SCOPE
+        ) {
+          ({ verifiedSubject } = await verifyFoodToken(token));
+        } else if (requestAuth.kind === 'discovery') {
+          try {
+            ({ fingerprint, verifiedSubject } = await verifyToken(token));
+          } catch (error) {
+            // Discovery is shared by tools protected by different scopes.
+            // Fall back to food:read only when the token was otherwise valid
+            // but lacked probe:identity. Never fall back on invalid JWTs.
+            if (!(error instanceof InsufficientProbeScopeError)) {
+              throw error;
+            }
+
+            ({ verifiedSubject } = await verifyFoodToken(token));
+          }
+        } else {
+          ({ fingerprint, verifiedSubject } = await verifyToken(token));
+        }
       } catch (error) {
+        const insufficientScope =
+          error instanceof InsufficientProbeScopeError ||
+          error instanceof InsufficientOAuthScopeError;
+
         safeDiagnosticLog({
           stage: 'auth-rejection',
           authFailure: classifyAuthFailure(error),
-          status: error instanceof InsufficientProbeScopeError ? 403 : 401,
+          status: insufficientScope ? 403 : 401,
         });
+
         return errorResponse(
-          error instanceof InsufficientProbeScopeError ? 403 : 401,
-          error instanceof InsufficientProbeScopeError
-            ? 'insufficient_scope'
-            : 'unauthorized'
+          insufficientScope ? 403 : 401,
+          insufficientScope ? 'insufficient_scope' : 'unauthorized',
+          requiredScope,
         );
       }
+    } else if (
+      requestAuth?.kind === 'protected-tool' &&
+      anonymousOperation !== 'probe-challenge'
+    ) {
+      return errorResponse(401, 'unauthorized', requiredScope);
     } else if (!anonymousOperation) {
-      return errorResponse(401, 'unauthorized');
+      return errorResponse(401, 'unauthorized', requiredScope);
     }
 
     // MCP v2 serves both the 2026 discovery protocol and legacy clients.
     // A fresh server is constructed for this request only.
     const mcp = createMcpHandler(
-      () => createIdentityProbeServer(fingerprint, verifiedSubject, readSyntheticFood),
+      () => createIdentityProbeServer(
+        fingerprint,
+        verifiedSubject,
+        readSyntheticFood,
+        readRealFood,
+      ),
       { responseMode: 'json' }
     );
 
@@ -280,4 +376,9 @@ export function createIdentityProbeHandler(
   };
 }
 
-export const handler = createIdentityProbeHandler();
+export const handler = createIdentityProbeHandler(
+  verifyIdentityProbeToken,
+  listSyntheticFoodEntries,
+  verifyFoodReadToken,
+  productionFoodReader,
+);

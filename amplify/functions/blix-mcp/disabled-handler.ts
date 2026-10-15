@@ -1,3 +1,5 @@
+import { FOOD_READ_SCOPE, PROBE_SCOPE } from './oauth-scope';
+
 const RESOURCE =
   'https://xa2eims733qub3334xn6yky7re0ytosu.lambda-url.us-east-1.on.aws/';
 
@@ -34,6 +36,7 @@ export const handler = async (event: LambdaEvent) => {
       body: JSON.stringify({
         resource: RESOURCE,
         authorization_servers: [AUTH0_ISSUER],
+        scopes_supported: [PROBE_SCOPE, FOOD_READ_SCOPE],
       }),
     };
   }

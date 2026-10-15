@@ -27,7 +27,17 @@ async function main() {
 
     try {
       const listed = await client.listTools();
-      assert(listed.tools.length === 2, 'Expected exactly two synthetic tools');
+
+      assert(
+        JSON.stringify(listed.tools.map((candidate) => candidate.name)) ===
+          JSON.stringify([
+            'identity_probe',
+            'ownership_probe',
+            'food_entries_probe',
+            'read_food_entries',
+          ]),
+        'Unexpected MCP tool contract'
+      );
 
       const tool = listed.tools.find((candidate) => candidate.name === 'identity_probe');
       assert(tool?.name === 'identity_probe', 'Identity probe missing');
@@ -52,6 +62,31 @@ async function main() {
       );
 
       console.log('PASS: identity_probe advertises probe-only OAuth metadata');
+
+      const realFood = listed.tools.find(
+        (candidate) => candidate.name === 'read_food_entries'
+      );
+
+      const realFoodSchemes = (
+        realFood?._meta as {
+          securitySchemes?: Array<{
+            type?: string;
+            scopes?: string[];
+          }>;
+        } | undefined
+      )?.securitySchemes;
+
+      assert(
+        Array.isArray(realFoodSchemes) &&
+          realFoodSchemes.length === 1 &&
+          realFoodSchemes[0].type === 'oauth2' &&
+          Array.isArray(realFoodSchemes[0].scopes) &&
+          realFoodSchemes[0].scopes.length === 1 &&
+          realFoodSchemes[0].scopes[0] === 'food:read',
+        'Expected food-only OAuth security scheme'
+      );
+
+      console.log('PASS: read_food_entries advertises food-only OAuth metadata');
 
       const result = await client.callTool({
         name: 'identity_probe',
