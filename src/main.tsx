@@ -9,6 +9,8 @@ import type { Schema } from '../amplify/data/resource';
 
 import '@aws-amplify/ui-react/styles.css';
 import './style.css';
+import { LanguageProvider, LanguageSelector, useLanguage } from './language';
+import { locales, type TranslationKey } from './i18n';
 
 import outputs from '../amplify_outputs.json';
 
@@ -35,7 +37,6 @@ const emptyStore: Store = {
   bp: [],
 };
 
-const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const clamp = (n: number) => Number.isFinite(n) ? Math.max(0, n) : 0;
 
@@ -59,6 +60,7 @@ const TRACKING_START = '2026-10-03';
 
 
 function App({ signOut }: { signOut?: () => void }) {
+  const { language, t, fmtDate } = useLanguage();
   const [theme, setTheme] = useState<'dark' | 'light'>(() => { const s = localStorage.getItem('health-theme'); return s === 'dark' || s === 'light' ? s : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark' });
   const [store, setStore] = useState<Store>(emptyStore);
   const [date, setDate] = useState(TODAY);
@@ -104,7 +106,7 @@ function App({ signOut }: { signOut?: () => void }) {
 
       if (errors?.length || !data) {
         console.error('FoodEntry create errors:', errors);
-        alert('The food entry could not be saved to the cloud.');
+        alert(t('foodSaveError'));
         return false;
       }
 
@@ -127,7 +129,7 @@ function App({ signOut }: { signOut?: () => void }) {
       return true;
     } catch (error) {
       console.error('Cloud save failed:', error);
-      alert('The food entry could not be saved to the cloud.');
+      alert(t('foodSaveError'));
       return false;
     }
   };
@@ -314,7 +316,7 @@ function App({ signOut }: { signOut?: () => void }) {
 
       if (errors?.length || !data) {
         console.error('Could not save vitals:', errors);
-        alert('The vitals could not be saved to the cloud.');
+        alert(t('vitalsSaveError'));
         return false;
       }
 
@@ -357,7 +359,7 @@ function App({ signOut }: { signOut?: () => void }) {
       return true;
     } catch (error) {
       console.error('Cloud vitals save failed:', error);
-      alert('The vitals could not be saved to the cloud.');
+      alert(t('vitalsSaveError'));
       return false;
     }
   };
@@ -396,7 +398,7 @@ function App({ signOut }: { signOut?: () => void }) {
 
       if (errors?.length) {
         console.error('Could not delete food:', errors);
-        alert('The food entry could not be deleted.');
+        alert(t('foodDeleteError'));
         return;
       }
 
@@ -414,7 +416,7 @@ function App({ signOut }: { signOut?: () => void }) {
       console.log('Food deleted from AWS:', id);
     } catch (error) {
       console.error('Cloud delete failed:', error);
-      alert('The food entry could not be deleted.');
+      alert(t('foodDeleteError'));
     }
   };
 
@@ -422,28 +424,29 @@ function App({ signOut }: { signOut?: () => void }) {
   return <main>
     <header>
       <div>
-        <span className="eyebrow">ALBERTO // HEALTH</span>
-        <h1>Daily dashboard</h1>
+        <span className="eyebrow">ALBERTO // {t('health')}</span>
+        <h1>{t('dashboard')}</h1>
       </div>
 
       <div className="headerRight">
         <button className="ghost" onClick={() => setShowVitals(true)}>
-          + VITALS
+          {t('vitals')}
         </button>
 
         <button
           className="themeToggle"
+          aria-label={theme === 'dark' ? t('light') : t('dark')}
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         >
           <span>{theme === 'dark' ? '☀' : '☾'}</span>
-          <b>{theme === 'dark' ? 'LIGHT' : 'DARK'}</b>
+          <b>{theme === 'dark' ? t('light') : t('dark')}</b>
         </button>
 
         <div className="mobileActions">
           <button
             className="mobileMenuButton"
             onClick={() => setShowMobileMenu(!showMobileMenu)}
-            aria-label="Open menu"
+            aria-label={t('openMenu')}
             aria-expanded={showMobileMenu}
           >
             •••
@@ -457,7 +460,7 @@ function App({ signOut }: { signOut?: () => void }) {
                   setShowVitals(true);
                 }}
               >
-                + VITALS
+                {t('vitals')}
               </button>
 
               {signOut && (
@@ -467,7 +470,7 @@ function App({ signOut }: { signOut?: () => void }) {
                     signOut();
                   }}
                 >
-                  SIGN OUT
+                  {t('signOut')}
                 </button>
               )}
             </div>
@@ -476,7 +479,7 @@ function App({ signOut }: { signOut?: () => void }) {
 
         {signOut && (
           <button className="ghost" onClick={signOut}>
-            SIGN OUT
+            {t('signOut')}
           </button>
         )}
       </div>
@@ -490,9 +493,9 @@ function App({ signOut }: { signOut?: () => void }) {
           className={date === d ? 'active' : ''}
         >
           {d === TODAY
-            ? 'TODAY'
+            ? t('today').toLocaleUpperCase(locales[language])
             : new Date(d + 'T12:00:00')
-              .toLocaleDateString('en-US', {
+              .toLocaleDateString(locales[language], {
                 month: 'short',
                 day: '2-digit',
               })
@@ -502,26 +505,26 @@ function App({ signOut }: { signOut?: () => void }) {
     </nav>
 
     <section className="hero">
-      <div><span>LATEST WEIGHT</span><strong>{latestW?.kg.toFixed(1) ?? '—'} <small>kg</small></strong><p>{latestW ? fmtDate(latestW.date) : ''} · {latestW ? (latestW.kg - targets.targetWeight).toFixed(1) : '—'} kg to target</p></div>
-      <div><span>TARGET</span><strong>{targets.targetWeight.toFixed(1)} <small>kg</small></strong><p>Fat loss + muscle retention</p></div>
-      <div><span>LATEST BP</span><strong>{latestBP ? `${latestBP.sys}/${latestBP.dia}` : '—'}</strong><p>{latestBP ? fmtDate(latestBP.date) : ''} · mmHg</p></div>
+      <div><span>{t('latestWeight')}</span><strong>{latestW?.kg.toFixed(1) ?? '—'} <small>kg</small></strong><p>{latestW ? fmtDate(latestW.date) : ''} · {latestW ? (latestW.kg - targets.targetWeight).toFixed(1) : '—'} {t('toTarget')}</p></div>
+      <div><span>{t('target')}</span><strong>{targets.targetWeight.toFixed(1)} <small>kg</small></strong><p>{t('fatLoss')}</p></div>
+      <div><span>{t('latestBP')}</span><strong>{latestBP ? `${latestBP.sys}/${latestBP.dia}` : '—'}</strong><p>{latestBP ? fmtDate(latestBP.date) : ''} · mmHg</p></div>
     </section>
 
     <section className="grid">
-      <article><div className="sectionHead"><h2>{date === TODAY ? 'Today' : fmtDate(date)}</h2><span>{Math.round(totals.kcal / targets.kcal * 100)}% calories used</span></div>
-        <Metric n="Calories" v={totals.kcal} max={targets.kcal} unit="kcal" />
-        <Metric n="Protein" v={totals.protein} max={targets.protein} unit="g" />
-        <Metric n="Carbs" v={totals.carbs} max={targets.carbs} unit="g" />
-        <Metric n="Fat" v={totals.fat} max={targets.fat} unit="g" />
-        <Metric n="Fiber" v={totals.fiber} max={targets.fiber} unit="g" />
+      <article><div className="sectionHead"><h2>{date === TODAY ? t('today') : fmtDate(date)}</h2><span>{Math.round(totals.kcal / targets.kcal * 100)}% {t('caloriesUsed')}</span></div>
+        <Metric n={t('calories')} v={totals.kcal} max={targets.kcal} unit="kcal" />
+        <Metric n={t('protein')} v={totals.protein} max={targets.protein} unit="g" />
+        <Metric n={t('carbs')} v={totals.carbs} max={targets.carbs} unit="g" />
+        <Metric n={t('fat')} v={totals.fat} max={targets.fat} unit="g" />
+        <Metric n={t('fiber')} v={totals.fiber} max={targets.fiber} unit="g" />
       </article>
-      <article className="remaining"><h2>Remaining</h2><div className="big">{Math.round(remaining.kcal)}<small> kcal</small></div><div className="big">{Math.round(remaining.protein)}<small> g protein</small></div><p>Against your 2,150 kcal / 170 g protein daily plan.</p><div className="status">{totals.protein >= targets.protein ? 'PROTEIN TARGET HIT' : `${Math.round(totals.protein / targets.protein * 100)}% OF PROTEIN TARGET`}</div></article>
+      <article className="remaining"><h2>{t('remaining')}</h2><div className="big">{Math.round(remaining.kcal)}<small> kcal</small></div><div className="big">{Math.round(remaining.protein)}<small> {t('proteinUnit')}</small></div><p>{t('dailyPlan')}</p><div className="status">{totals.protein >= targets.protein ? t('proteinHit') : `${Math.round(totals.protein / targets.protein * 100)}% ${t('proteinTarget')}`}</div></article>
     </section>
 
-    <section className="charts"><article><div className="sectionHead"><h2>Weight trend</h2><span>Goal {targets.targetWeight} kg</span></div><Spark data={store.weights.map(x => ({ label: fmtDate(x.date), value: x.kg }))} target={targets.targetWeight} /></article><article><div className="sectionHead"><h2>Blood pressure</h2><span>Recent readings</span></div><BPChart data={store.bp} /></article></section>
+    <section className="charts"><article><div className="sectionHead"><h2>{t('weightTrend')}</h2><span>{t('goal')} {targets.targetWeight} kg</span></div><Spark data={store.weights.map(x => ({ label: fmtDate(x.date), value: x.kg }))} target={targets.targetWeight} /></article><article><div className="sectionHead"><h2>{t('bloodPressure')}</h2><span>{t('recentReadings')}</span></div><BPChart data={store.bp} /></article></section>
 
-    <section className="meals"><div className="sectionHead"><h2>Food log</h2><button className="add" onClick={() => setShowAdd(true)}>+ ADD FOOD</button></div>{day.meals.length === 0 ? <div className="empty">No food logged for this day.</div> : day.meals.map(m => <div className="meal" key={m.id}><div className="mealMain"><b>{m.name}</b><span>{m.detail}</span><em className={`q ${m.quality}`}>{m.quality}</em></div><div className="nums"><b>{Math.round(m.kcal)} kcal</b><span>{Math.round(m.protein)} g protein</span></div><button className="delete" onClick={() => removeMeal(m.id)} aria-label="Delete food">×</button></div>)}</section>
-    <footer> Nutrition values can be measured, label-derived or estimated. Data is securely synced with your account. </footer>
+    <section className="meals"><div className="sectionHead"><h2>{t('foodLog')}</h2><button className="add" onClick={() => setShowAdd(true)}>+ {t('addFood').toLocaleUpperCase(locales[language])}</button></div>{day.meals.length === 0 ? <div className="empty">{t('emptyFood')}</div> : day.meals.map(m => <div className="meal" key={m.id}><div className="mealMain"><b>{m.name}</b><span>{m.detail}</span><em className={`q ${m.quality}`}>{t(m.quality)}</em></div><div className="nums"><b>{Math.round(m.kcal)} kcal</b><span>{Math.round(m.protein)} {t('proteinUnit')}</span></div><button className="delete" onClick={() => removeMeal(m.id)} aria-label={t('deleteFood')}>×</button></div>)}</section>
+    <footer>{t('footer')}</footer>
 
     {showAdd && (
       <FoodModal
@@ -556,15 +559,18 @@ function App({ signOut }: { signOut?: () => void }) {
 }
 
 function OwnershipProbeRunner({ signOut }: { signOut?: () => void }) {
+  const { t } = useLanguage();
   type Probe = Schema['OwnershipProbe']['type'];
 
   const [probes, setProbes] = useState<Probe[]>([]);
   const [probeId, setProbeId] = useState('');
-  const [directResult, setDirectResult] = useState<string>('Not tested');
-  const [status, setStatus] = useState('Ready');
+  const [statusDetail, setStatusDetail] = useState('');
+  const [readResult, setReadResult] = useState<TranslationKey>('notTested');
+  const [directResult, setDirectResult] = useState<string | null>(null);
+  const [status, setStatus] = useState<TranslationKey>('ready');
 
   const createProbe = async () => {
-    setStatus('Creating synthetic probe...');
+    setStatus('creatingProbe'); setStatusDetail('');
 
     const { data, errors } = await client.models.OwnershipProbe.create(
       { label: 'synthetic-ownership-probe' },
@@ -573,16 +579,16 @@ function OwnershipProbeRunner({ signOut }: { signOut?: () => void }) {
 
     if (errors?.length || !data) {
       console.error('OwnershipProbe create failed:', errors);
-      setStatus('CREATE FAILED');
+      setStatus('createFailed'); setStatusDetail('');
       return;
     }
 
     setProbeId(data.id);
-    setStatus(`Created probe: ${data.id}`);
+    setStatus('createdProbe'); setStatusDetail(data.id);
   };
 
   const listVisibleProbes = async () => {
-    setStatus('Listing visible probes...');
+    setStatus('listingProbes'); setStatusDetail('');
 
     const { data, errors } = await client.models.OwnershipProbe.list({
       authMode: 'userPool',
@@ -591,21 +597,21 @@ function OwnershipProbeRunner({ signOut }: { signOut?: () => void }) {
 
     if (errors?.length) {
       console.error('OwnershipProbe list failed:', errors);
-      setStatus('LIST FAILED');
+      setStatus('listFailed'); setStatusDetail('');
       return;
     }
 
     setProbes(data);
-    setStatus(`Visible probes: ${data.length}`);
+    setStatus('visibleProbes'); setStatusDetail(String(data.length));
   };
 
   const getProbeById = async () => {
     if (!probeId.trim()) {
-      setDirectResult('Enter a probe ID first.');
+      setReadResult('enterProbe'); setDirectResult(null);
       return;
     }
 
-    setStatus('Testing direct read by ID...');
+    setStatus('testingRead'); setStatusDetail('');
 
     const { data, errors } = await client.models.OwnershipProbe.get(
       { id: probeId.trim() },
@@ -614,53 +620,53 @@ function OwnershipProbeRunner({ signOut }: { signOut?: () => void }) {
 
     if (errors?.length) {
       console.error('OwnershipProbe direct read errors:', errors);
-      setDirectResult('DENIED / NOT VISIBLE');
-      setStatus('Direct-read test completed');
+      setReadResult('denied'); setDirectResult(null);
+      setStatus('readCompleted'); setStatusDetail('');
       return;
     }
 
     if (!data) {
-      setDirectResult('DENIED / NOT VISIBLE');
-      setStatus('Direct-read test completed');
+      setReadResult('denied'); setDirectResult(null);
+      setStatus('readCompleted'); setStatusDetail('');
       return;
     }
 
+    setReadResult('visible');
     setDirectResult(
-      `VISIBLE — id=${data.id} | label=${data.label} | owner=${data.owner ?? '—'}`
+      `id=${data.id} | label=${data.label} | owner=${data.owner ?? '—'}`
     );
-    setStatus('Direct-read test completed');
+    setStatus('readCompleted'); setStatusDetail('');
   };
 
   return (
     <main style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
-      <h1>Ownership Isolation Probe</h1>
+      <h1>{t('probeTitle')}</h1>
 
       <p>
-        Synthetic test only. This screen does not load FoodEntry, Vital,
-        or DailyTarget.
+        {t('probeNotice')}
       </p>
 
-      <p><strong>Status:</strong> {status}</p>
+      <p><strong>{t('status')}:</strong> {t(status)}{statusDetail ? `: ${statusDetail}` : ''}</p>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
-        <button onClick={createProbe}>CREATE SYNTHETIC PROBE</button>
-        <button onClick={listVisibleProbes}>LIST MY VISIBLE PROBES</button>
-        {signOut && <button onClick={signOut}>SIGN OUT</button>}
+        <button onClick={createProbe}>{t('createProbe')}</button>
+        <button onClick={listVisibleProbes}>{t('listProbes')}</button>
+        {signOut && <button onClick={signOut}>{t('signOut')}</button>}
       </div>
 
-      <h2>Visible probes</h2>
+      <h2>{t('visibleProbes')}</h2>
 
       {probes.length === 0 ? (
-        <p>None loaded.</p>
+        <p>{t('noneLoaded')}</p>
       ) : (
         <ul>
           {probes.map((probe) => (
             <li key={probe.id}>
               <strong>ID:</strong> {probe.id}
               <br />
-              <strong>Label:</strong> {probe.label}
+              <strong>{t('probeLabel')}:</strong> {probe.label}
               <br />
-              <strong>Owner:</strong> {probe.owner ?? '—'}
+              <strong>{t('owner')}:</strong> {probe.owner ?? '—'}
             </li>
           ))}
         </ul>
@@ -668,32 +674,31 @@ function OwnershipProbeRunner({ signOut }: { signOut?: () => void }) {
 
       <hr style={{ margin: '32px 0' }} />
 
-      <h2>Direct isolation test</h2>
+      <h2>{t('directTest')}</h2>
 
       <p>
-        Enter a synthetic OwnershipProbe ID to test whether the currently
-        authenticated user can read that exact record.
+        {t('probeInstructions')}
       </p>
 
       <input
         value={probeId}
         onChange={(e) => setProbeId(e.target.value)}
-        placeholder="OwnershipProbe ID"
+        aria-label={t('probeId')} placeholder={t('probeId')}
         style={{ width: '100%', padding: 10, marginBottom: 12 }}
       />
 
-      <button onClick={getProbeById}>TEST DIRECT READ</button>
+      <button onClick={getProbeById}>{t('testRead')}</button>
 
       <p>
-        <strong>Result:</strong> {directResult}
+        <strong>{t('result')}:</strong> {t(readResult)} {directResult}
       </p>
     </main>
   );
 }
 
 function Metric({ n, v, max, unit }: { n: string; v: number; max: number; unit: string }) { const pct = Math.min(100, v / max * 100); return <div className="metric"><div><b>{n}</b><span>{Math.round(v)} / {max} {unit}</span></div><div className="bar"><i style={{ width: `${pct}%` }} /></div></div> }
-function Spark({ data, target }: { data: { label: string, value: number }[]; target: number }) { if (data.length < 2) return null; const w = 520, h = 150, p = 14, min = Math.min(target, ...data.map(d => d.value)) - 1, max = Math.max(...data.map(d => d.value)) + 1; const pts = data.map((d, i) => `${p + i * (w - 2 * p) / (data.length - 1)},${p + (max - d.value) * (h - 2 * p) / (max - min)}`).join(' '); const ty = p + (max - target) * (h - 2 * p) / (max - min); return <div className="spark"><svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Weight trend"><line x1={p} y1={ty} x2={w - p} y2={ty} className="goalLine" /><polyline points={pts} />{data.map((d, i) => { const [x, y] = pts.split(' ')[i].split(','); return <circle key={i} cx={x} cy={y} r="4" /> })}</svg><div className="chartLabels"><span>{data[0].label} · {data[0].value.toFixed(1)}</span><b>{data.at(-1)!.value.toFixed(1)} kg</b><span>{data.at(-1)!.label}</span></div></div> }
-function BPChart({ data }: { data: BPEntry[] }) { return <div className="bpRows">{data.slice(-4).reverse().map((b, i) => <div key={i}><span>{fmtDate(b.date)}</span><b>{b.sys}/{b.dia}</b><i style={{ width: `${Math.min(100, b.sys / 180 * 100)}%` }} /></div>)}</div> }
+function Spark({ data, target }: { data: { label: string, value: number }[]; target: number }) { const { t } = useLanguage(); if (data.length < 2) return null; const w = 520, h = 150, p = 14, min = Math.min(target, ...data.map(d => d.value)) - 1, max = Math.max(...data.map(d => d.value)) + 1; const pts = data.map((d, i) => `${p + i * (w - 2 * p) / (data.length - 1)},${p + (max - d.value) * (h - 2 * p) / (max - min)}`).join(' '); const ty = p + (max - target) * (h - 2 * p) / (max - min); return <div className="spark"><svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={t('weightTrend')}><line x1={p} y1={ty} x2={w - p} y2={ty} className="goalLine" /><polyline points={pts} />{data.map((d, i) => { const [x, y] = pts.split(' ')[i].split(','); return <circle key={i} cx={x} cy={y} r="4" /> })}</svg><div className="chartLabels"><span>{data[0].label} · {data[0].value.toFixed(1)}</span><b>{data.at(-1)!.value.toFixed(1)} kg</b><span>{data.at(-1)!.label}</span></div></div> }
+function BPChart({ data }: { data: BPEntry[] }) { const { fmtDate } = useLanguage(); return <div className="bpRows">{data.slice(-4).reverse().map((b, i) => <div key={i}><span>{fmtDate(b.date)}</span><b>{b.sys}/{b.dia}</b><i style={{ width: `${Math.min(100, b.sys / 180 * 100)}%` }} /></div>)}</div> }
 
 ///////////. FoodModel Function
 
@@ -704,8 +709,9 @@ function FoodModal({
   onClose: () => void;
   onSave: (m: Meal) => Promise<boolean>;
 }) {
+  const { t } = useLanguage();
   const [f, setF] = useState({
-    name: 'Meal',
+    name: '',
     detail: '',
     kcal: '',
     protein: '',
@@ -741,7 +747,7 @@ function FoodModal({
 
           const saved = await onSave({
             id: uid(),
-            name: f.name || 'Meal',
+            name: f.name || t('meal'),
             detail: f.detail,
             kcal: clamp(+f.kcal),
             protein: clamp(+f.protein),
@@ -757,31 +763,31 @@ function FoodModal({
         }}
       >
         <div className="modalHead">
-          <h2>Add food</h2>
+          <h2>{t('addFood')}</h2>
 
-          <button type="button" onClick={onClose}>
+          <button type="button" aria-label={t('close')} onClick={onClose}>
             ×
           </button>
         </div>
 
         <label>
-          Category
-          <input value={f.name} onChange={field('name')} />
+          {t('category')}
+          <input placeholder={t('meal')} value={f.name} onChange={field('name')} />
         </label>
 
         <label>
-          Description
+          {t('description')}
           <input
             value={f.detail}
             onChange={field('detail')}
-            placeholder="e.g. chicken breast, 180 g"
+            placeholder={t('foodExample')}
             autoFocus
           />
         </label>
 
         <div className="formGrid">
           <label>
-            Calories
+            {t('calories')}
             <input
               type="number"
               value={f.kcal}
@@ -790,7 +796,7 @@ function FoodModal({
           </label>
 
           <label>
-            Protein (g)
+            {t('protein')} (g)
             <input
               type="number"
               step="0.1"
@@ -800,7 +806,7 @@ function FoodModal({
           </label>
 
           <label>
-            Carbs (g)
+            {t('carbs')} (g)
             <input
               type="number"
               step="0.1"
@@ -810,7 +816,7 @@ function FoodModal({
           </label>
 
           <label>
-            Fat (g)
+            {t('fat')} (g)
             <input
               type="number"
               step="0.1"
@@ -820,7 +826,7 @@ function FoodModal({
           </label>
 
           <label>
-            Fiber (g)
+            {t('fiber')} (g)
             <input
               type="number"
               step="0.1"
@@ -830,20 +836,20 @@ function FoodModal({
           </label>
 
           <label>
-            Source
+            {t('source')}
             <select
               value={f.quality}
               onChange={field('quality')}
             >
-              <option value="measured">Measured</option>
-              <option value="label">Label</option>
-              <option value="estimated">Estimated</option>
+              <option value="measured">{t('measured')}</option>
+              <option value="label">{t('label')}</option>
+              <option value="estimated">{t('estimated')}</option>
             </select>
           </label>
         </div>
 
         <button className="primary" disabled={saving}>
-          {saving ? 'SAVING...' : 'SAVE FOOD'}
+          {saving ? t('saving') : t('saveFood')}
         </button>
       </form>
     </div>
@@ -852,21 +858,27 @@ function FoodModal({
 
 ///////////
 
-function VitalsModal({ latestW, onClose, onSave }: { latestW: number; onClose: () => void; onSave: (kg: number, sys: number, dia: number) => Promise<void> }) { const [kg, setKg] = useState(String(latestW)); const [sys, setSys] = useState(''); const [dia, setDia] = useState(''); return <div className="overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}><form className="modal small" onSubmit={e => { e.preventDefault(); onSave(+kg, +sys, +dia) }}><div className="modalHead"><h2>Add today's vitals</h2><button type="button" onClick={onClose}>×</button></div><label>Weight (kg)<input type="number" step="0.1" value={kg} onChange={e => setKg(e.target.value)} /></label><div className="formGrid two"><label>Systolic<input type="number" value={sys} onChange={e => setSys(e.target.value)} placeholder="e.g. 135" /></label><label>Diastolic<input type="number" value={dia} onChange={e => setDia(e.target.value)} placeholder="e.g. 88" /></label></div><button className="primary">SAVE VITALS</button></form></div> }
+function VitalsModal({ latestW, onClose, onSave }: { latestW: number; onClose: () => void; onSave: (kg: number, sys: number, dia: number) => Promise<void> }) { const { t } = useLanguage(); const [kg, setKg] = useState(String(latestW)); const [sys, setSys] = useState(''); const [dia, setDia] = useState(''); return <div className="overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}><form className="modal small" onSubmit={e => { e.preventDefault(); onSave(+kg, +sys, +dia) }}><div className="modalHead"><h2>{t('addVitals')}</h2><button type="button" aria-label={t('close')} onClick={onClose}>×</button></div><label>{t('weight')} (kg)<input type="number" step="0.1" value={kg} onChange={e => setKg(e.target.value)} /></label><div className="formGrid two"><label>{t('systolic')}<input type="number" value={sys} onChange={e => setSys(e.target.value)} placeholder={t('sysExample')} /></label><label>{t('diastolic')}<input type="number" value={dia} onChange={e => setDia(e.target.value)} placeholder={t('diaExample')} /></label></div><button className="primary">{t('saveVitals')}</button></form></div> }
 
 const ownershipProbeMode =
   new URLSearchParams(window.location.search).get('ownership-probe') === '1';
 
+// Subscribe the authentication UI too, so its built-in vocabulary refreshes
+// without remounting the form or clearing a signed-in dashboard.
+function LocalizedAuthenticator() {
+  useLanguage();
+  return <Authenticator>
+    {({ signOut }) => ownershipProbeMode
+      ? <OwnershipProbeRunner signOut={signOut} />
+      : <App signOut={signOut} />}
+  </Authenticator>;
+}
+
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <Authenticator>
-      {({ signOut }) =>
-        ownershipProbeMode ? (
-          <OwnershipProbeRunner signOut={signOut} />
-        ) : (
-          <App signOut={signOut} />
-        )
-      }
-    </Authenticator>
+    <LanguageProvider>
+      <LanguageSelector />
+      <LocalizedAuthenticator />
+    </LanguageProvider>
   </React.StrictMode>
 );
