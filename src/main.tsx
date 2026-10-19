@@ -11,6 +11,8 @@ import '@aws-amplify/ui-react/styles.css';
 import './style.css';
 import { LanguageProvider, LanguageSelector, useLanguage } from './language';
 import { locales, type TranslationKey } from './i18n';
+import { WeightGoalCard } from './weight-goal-card';
+import { weightChartBounds } from './weight-goal';
 
 import outputs from '../amplify_outputs.json';
 
@@ -29,7 +31,7 @@ type ListPage<T> = { data: T[]; nextToken?: string | null; errors?: readonly unk
 
 
 
-const targets = { kcal: 2150, protein: 170, carbs: 210, fat: 70, fiber: 30, targetWeight: 77 };
+const targets = { kcal: 2150, protein: 170, carbs: 210, fat: 70, fiber: 30 };
 const TODAY = new Date().toLocaleDateString('en-CA');
 const emptyStore: Store = {
   days: {},
@@ -59,11 +61,12 @@ const getDateRange = (start: string, end: string) => {
 const TRACKING_START = '2026-10-03';
 
 
-function App({ signOut }: { signOut?: () => void }) {
+function App({ signOut, userId }: { signOut?: () => void; userId: string }) {
   const { language, t, fmtDate } = useLanguage();
   const [theme, setTheme] = useState<'dark' | 'light'>(() => { const s = localStorage.getItem('health-theme'); return s === 'dark' || s === 'light' ? s : window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark' });
   const [store, setStore] = useState<Store>(emptyStore);
   const [date, setDate] = useState(TODAY);
+  const [targetWeight, setTargetWeight] = useState<number | null>(null);
 
   const availableDates = useMemo(
     () => getDateRange(TRACKING_START, TODAY),
@@ -505,8 +508,8 @@ function App({ signOut }: { signOut?: () => void }) {
     </nav>
 
     <section className="hero">
-      <div><span>{t('latestWeight')}</span><strong>{latestW?.kg.toFixed(1) ?? '—'} <small>kg</small></strong><p>{latestW ? fmtDate(latestW.date) : ''} · {latestW ? (latestW.kg - targets.targetWeight).toFixed(1) : '—'} {t('toTarget')}</p></div>
-      <div><span>{t('target')}</span><strong>{targets.targetWeight.toFixed(1)} <small>kg</small></strong><p>{t('fatLoss')}</p></div>
+      <div><span>{t('latestWeight')}</span><strong>{latestW?.kg.toFixed(1) ?? '—'} <small>kg</small></strong><p>{latestW ? fmtDate(latestW.date) : ''} · {latestW && targetWeight !== null ? Math.abs(latestW.kg - targetWeight).toFixed(1) : '—'} {t('toTarget')}</p></div>
+      <WeightGoalCard userId={userId} model={client.models.WeightGoal} onChange={setTargetWeight} />
       <div><span>{t('latestBP')}</span><strong>{latestBP ? `${latestBP.sys}/${latestBP.dia}` : '—'}</strong><p>{latestBP ? fmtDate(latestBP.date) : ''} · mmHg</p></div>
     </section>
 
@@ -521,7 +524,7 @@ function App({ signOut }: { signOut?: () => void }) {
       <article className="remaining"><h2>{t('remaining')}</h2><div className="big">{Math.round(remaining.kcal)}<small> kcal</small></div><div className="big">{Math.round(remaining.protein)}<small> {t('proteinUnit')}</small></div><p>{t('dailyPlan')}</p><div className="status">{totals.protein >= targets.protein ? t('proteinHit') : `${Math.round(totals.protein / targets.protein * 100)}% ${t('proteinTarget')}`}</div></article>
     </section>
 
-    <section className="charts"><article><div className="sectionHead"><h2>{t('weightTrend')}</h2><span>{t('goal')} {targets.targetWeight} kg</span></div><Spark data={store.weights.map(x => ({ label: fmtDate(x.date), value: x.kg }))} target={targets.targetWeight} /></article><article><div className="sectionHead"><h2>{t('bloodPressure')}</h2><span>{t('recentReadings')}</span></div><BPChart data={store.bp} /></article></section>
+    <section className="charts"><article><div className="sectionHead"><h2>{t('weightTrend')}</h2><span>{t('goal')} {targetWeight === null ? '—' : `${targetWeight.toFixed(1)} kg`}</span></div><Spark data={store.weights.map(x => ({ label: fmtDate(x.date), value: x.kg }))} target={targetWeight} /></article><article><div className="sectionHead"><h2>{t('bloodPressure')}</h2><span>{t('recentReadings')}</span></div><BPChart data={store.bp} /></article></section>
 
     <section className="meals"><div className="sectionHead"><h2>{t('foodLog')}</h2><button className="add" onClick={() => setShowAdd(true)}>+ {t('addFood').toLocaleUpperCase(locales[language])}</button></div>{day.meals.length === 0 ? <div className="empty">{t('emptyFood')}</div> : day.meals.map(m => <div className="meal" key={m.id}><div className="mealMain"><b>{m.name}</b><span>{m.detail}</span><em className={`q ${m.quality}`}>{t(m.quality)}</em></div><div className="nums"><b>{Math.round(m.kcal)} kcal</b><span>{Math.round(m.protein)} {t('proteinUnit')}</span></div><button className="delete" onClick={() => removeMeal(m.id)} aria-label={t('deleteFood')}>×</button></div>)}</section>
     <footer>{t('footer')}</footer>
@@ -697,7 +700,7 @@ function OwnershipProbeRunner({ signOut }: { signOut?: () => void }) {
 }
 
 function Metric({ n, v, max, unit }: { n: string; v: number; max: number; unit: string }) { const pct = Math.min(100, v / max * 100); return <div className="metric"><div><b>{n}</b><span>{Math.round(v)} / {max} {unit}</span></div><div className="bar"><i style={{ width: `${pct}%` }} /></div></div> }
-function Spark({ data, target }: { data: { label: string, value: number }[]; target: number }) { const { t } = useLanguage(); if (data.length < 2) return null; const w = 520, h = 150, p = 14, min = Math.min(target, ...data.map(d => d.value)) - 1, max = Math.max(...data.map(d => d.value)) + 1; const pts = data.map((d, i) => `${p + i * (w - 2 * p) / (data.length - 1)},${p + (max - d.value) * (h - 2 * p) / (max - min)}`).join(' '); const ty = p + (max - target) * (h - 2 * p) / (max - min); return <div className="spark"><svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={t('weightTrend')}><line x1={p} y1={ty} x2={w - p} y2={ty} className="goalLine" /><polyline points={pts} />{data.map((d, i) => { const [x, y] = pts.split(' ')[i].split(','); return <circle key={i} cx={x} cy={y} r="4" /> })}</svg><div className="chartLabels"><span>{data[0].label} · {data[0].value.toFixed(1)}</span><b>{data.at(-1)!.value.toFixed(1)} kg</b><span>{data.at(-1)!.label}</span></div></div> }
+function Spark({ data, target }: { data: { label: string, value: number }[]; target: number | null }) { const { t } = useLanguage(); if (data.length < 2) return null; const w = 520, h = 150, p = 14, [min, max] = weightChartBounds(data.map(d => d.value), target); const pts = data.map((d, i) => `${p + i * (w - 2 * p) / (data.length - 1)},${p + (max - d.value) * (h - 2 * p) / (max - min)}`).join(' '); const ty = target === null ? null : p + (max - target) * (h - 2 * p) / (max - min); return <div className="spark"><svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={t('weightTrend')}>{ty !== null && <line x1={p} y1={ty} x2={w - p} y2={ty} className="goalLine" />}<polyline points={pts} />{data.map((d, i) => { const [x, y] = pts.split(' ')[i].split(','); return <circle key={i} cx={x} cy={y} r="4" /> })}</svg><div className="chartLabels"><span>{data[0].label} · {data[0].value.toFixed(1)}</span><b>{data.at(-1)!.value.toFixed(1)} kg</b><span>{data.at(-1)!.label}</span></div></div> }
 function BPChart({ data }: { data: BPEntry[] }) { const { fmtDate } = useLanguage(); return <div className="bpRows">{data.slice(-4).reverse().map((b, i) => <div key={i}><span>{fmtDate(b.date)}</span><b>{b.sys}/{b.dia}</b><i style={{ width: `${Math.min(100, b.sys / 180 * 100)}%` }} /></div>)}</div> }
 
 ///////////. FoodModel Function
@@ -868,9 +871,9 @@ const ownershipProbeMode =
 function LocalizedAuthenticator() {
   useLanguage();
   return <Authenticator>
-    {({ signOut }) => ownershipProbeMode
+    {({ signOut, user }) => ownershipProbeMode
       ? <OwnershipProbeRunner signOut={signOut} />
-      : <App signOut={signOut} />}
+      : <App key={user!.userId} userId={user!.userId} signOut={signOut} />}
   </Authenticator>;
 }
 
