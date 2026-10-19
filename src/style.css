@@ -722,3 +722,16 @@ header > div, .grid > article, .charts > article { min-width: 0; }
   header { align-items: flex-start; }
   .headerRight { margin-left: auto; }
 }
+
+/* Personal weight goal */
+.goalAction { margin-top: 12px; max-width: 100%; white-space: normal; line-height: 1.3; }
+button:disabled { opacity: .55; cursor: wait; }
+.weightGoalDialog {
+  color: var(--text);
+  margin: auto;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.weightGoalDialog::backdrop { background: #0009; }
+.weightGoalDialog p { font-size: 13px; color: var(--muted); }
+.weightGoalDialog .formError { color: var(--text); font-weight: 600; }

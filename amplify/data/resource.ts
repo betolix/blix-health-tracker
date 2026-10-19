@@ -2,6 +2,18 @@ import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 
 const schema = a.schema({
 
+  // One goal per Cognito subject. The primary key is also the authorization
+  // owner, so clients cannot create a goal in another user's namespace.
+  WeightGoal: a
+    .model({
+      userId: a.string().required(),
+      targetWeightKg: a.float().required().validate(v => v.gt(0)),
+    })
+    .identifier(['userId'])
+    .authorization((allow) => [
+      allow.ownerDefinedIn('userId').identityClaim('sub'),
+    ]),
+
   FoodEntry: a
     .model({
       date: a.date().required(),
