@@ -682,3 +682,43 @@ footer {
   }
 
 }
+/* Language selection remains available before and after authentication. */
+.languageBar {
+  max-width: 1120px;
+  margin: auto;
+  padding: 16px 24px 0;
+  display: flex;
+  justify-content: flex-end;
+}
+.languageControl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.languageControl select {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 7px;
+}
+.languageControl select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+header, .headerRight, .sectionHead, .metric > div:first-child {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+header > div, .grid > article, .charts > article { min-width: 0; }
+.headerRight { justify-content: flex-end; }
+.sectionHead > span { line-height: 1.5; }
+.mobileMenu { width: max-content; max-width: calc(100vw - 28px); }
+.hero p, .hero span, .mealMain b { overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .languageBar { padding: 14px 14px 0; }
+  header { align-items: flex-start; }
+  .headerRight { margin-left: auto; }
+}
