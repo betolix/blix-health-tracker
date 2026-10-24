@@ -735,3 +735,17 @@ button:disabled { opacity: .55; cursor: wait; }
 .weightGoalDialog::backdrop { background: #0009; }
 .weightGoalDialog p { font-size: 13px; color: var(--muted); }
 .weightGoalDialog .formError { color: var(--text); font-weight: 600; }
+
+.nameButton {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.nameButton:disabled { cursor: default; text-decoration: none; }
+.nameButton:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
