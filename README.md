@@ -25,6 +25,9 @@ Lambda and Auth0**.
 - **Set a personal weight goal:** save and edit a goal independently of daily
   nutrition targets. The card, remaining-weight calculation and chart use the
   saved goal. Accounts without a goal show an unset state.
+- **See your own name:** the dashboard header shows your account name, or the
+  start of your email until you set one. Select it to edit; it is saved to your
+  Cognito account.
 - **Use English or Spanish:** switch dashboard and sign-in language immediately.
 - **Choose light or dark mode:** use a responsive layout on desktop and mobile.
 - **Connect ChatGPT:** read, create, update and delete supported records through
@@ -154,7 +157,7 @@ operations. Tool-to-scope mappings live in
 
 ## Tests and validation
 
-Run language and personal-goal regression tests:
+Run language, display-name and personal-goal regression tests:
 
 ```bash
 node --import tsx --test tests/*.test.ts scripts/weight-goal*.test.ts

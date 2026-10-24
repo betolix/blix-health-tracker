@@ -12,6 +12,7 @@ import './style.css';
 import { LanguageProvider, LanguageSelector, useLanguage } from './language';
 import { locales, type TranslationKey } from './i18n';
 import { WeightGoalCard } from './weight-goal-card';
+import { DisplayNameEyebrow } from './display-name-eyebrow';
 import { weightChartBounds } from './weight-goal';
 
 import outputs from '../amplify_outputs.json';
@@ -427,7 +428,7 @@ function App({ signOut, userId }: { signOut?: () => void; userId: string }) {
   return <main>
     <header>
       <div>
-        <span className="eyebrow">ALBERTO // {t('health')}</span>
+        <DisplayNameEyebrow userId={userId} />
         <h1>{t('dashboard')}</h1>
       </div>
 
@@ -546,7 +547,7 @@ function App({ signOut, userId }: { signOut?: () => void; userId: string }) {
 
     {showVitals && (
       <VitalsModal
-        latestW={latestW?.kg ?? 90.1}
+        latestW={latestW?.kg}
         onClose={() => setShowVitals(false)}
         onSave={async (kg, sys, dia) => {
           const saved = await saveVitals(kg, sys, dia);
@@ -861,7 +862,7 @@ function FoodModal({
 
 ///////////
 
-function VitalsModal({ latestW, onClose, onSave }: { latestW: number; onClose: () => void; onSave: (kg: number, sys: number, dia: number) => Promise<void> }) { const { t } = useLanguage(); const [kg, setKg] = useState(String(latestW)); const [sys, setSys] = useState(''); const [dia, setDia] = useState(''); return <div className="overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}><form className="modal small" onSubmit={e => { e.preventDefault(); onSave(+kg, +sys, +dia) }}><div className="modalHead"><h2>{t('addVitals')}</h2><button type="button" aria-label={t('close')} onClick={onClose}>×</button></div><label>{t('weight')} (kg)<input type="number" step="0.1" value={kg} onChange={e => setKg(e.target.value)} /></label><div className="formGrid two"><label>{t('systolic')}<input type="number" value={sys} onChange={e => setSys(e.target.value)} placeholder={t('sysExample')} /></label><label>{t('diastolic')}<input type="number" value={dia} onChange={e => setDia(e.target.value)} placeholder={t('diaExample')} /></label></div><button className="primary">{t('saveVitals')}</button></form></div> }
+function VitalsModal({ latestW, onClose, onSave }: { latestW?: number; onClose: () => void; onSave: (kg: number, sys: number, dia: number) => Promise<void> }) { const { t } = useLanguage(); const [kg, setKg] = useState(latestW === undefined ? '' : String(latestW)); const [sys, setSys] = useState(''); const [dia, setDia] = useState(''); return <div className="overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}><form className="modal small" onSubmit={e => { e.preventDefault(); onSave(+kg, +sys, +dia) }}><div className="modalHead"><h2>{t('addVitals')}</h2><button type="button" aria-label={t('close')} onClick={onClose}>×</button></div><label>{t('weight')} (kg)<input type="number" step="0.1" value={kg} onChange={e => setKg(e.target.value)} /></label><div className="formGrid two"><label>{t('systolic')}<input type="number" value={sys} onChange={e => setSys(e.target.value)} placeholder={t('sysExample')} /></label><label>{t('diastolic')}<input type="number" value={dia} onChange={e => setDia(e.target.value)} placeholder={t('diaExample')} /></label></div><button className="primary">{t('saveVitals')}</button></form></div> }
 
 const ownershipProbeMode =
   new URLSearchParams(window.location.search).get('ownership-probe') === '1';
