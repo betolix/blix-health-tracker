@@ -112,13 +112,24 @@ h2 {
   align-items: center
 }
 
+/* The strip grows by one day at a time, so it scrolls on its own at every
+   width instead of widening the page. */
 .daynav {
   display: flex;
   gap: 7px;
-  margin: 18px 0
+  margin: 18px 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding-bottom: 2px
+}
+
+.daynav::-webkit-scrollbar {
+  display: none
 }
 
 .daynav button {
+  flex: 0 0 auto;
   color: var(--muted);
   background: transparent
 }
@@ -548,19 +559,10 @@ footer {
 
   /* Date selector */
   .daynav {
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
     scroll-snap-type: x proximity;
-    padding-bottom: 2px;
-  }
-
-  .daynav::-webkit-scrollbar {
-    display: none;
   }
 
   .daynav button {
-    flex: 0 0 auto;
     scroll-snap-align: start;
   }
 
